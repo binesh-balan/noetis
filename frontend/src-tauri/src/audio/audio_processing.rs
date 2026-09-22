@@ -24,6 +24,34 @@ pub fn sanitize_filename(name: &str) -> String {
         .to_string()
 }
 
+/// Restricts `path` to owner-only access (rwx------ / 0700) on Unix. No-op on Windows,
+/// where the directory already inherits the user-profile ACL from its parent under
+/// %APPDATA% rather than a POSIX mode bit, so there's no equivalent single call to make
+/// here — see security/reports/08-data-protection.md §10 ("no app-created directory has
+/// restrictive permissions set — relies entirely on OS defaults"). On Linux in
+/// particular, the OS default (mode 0755, moderated only by the process umask) can leave
+/// meeting recordings/transcripts group- or world-readable on a shared multi-user
+/// system; this closes that gap for directories the app creates to hold that content.
+/// Best-effort: a failure here is logged, not fatal — the directory is still usable,
+/// just not hardened.
+fn restrict_to_owner(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)) {
+            warn!(
+                "Failed to restrict permissions on {}: {}",
+                path.display(),
+                e
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path; // no-op on non-Unix targets
+    }
+}
+
 /// Create a meeting folder with timestamp and return the path
 /// Creates structure: base_path/MeetingName_YYYY-MM-DD_HH-MM/
 ///                    ├── .checkpoints/  (for incremental saves, optional)
@@ -44,11 +72,13 @@ pub fn create_meeting_folder(
 
     // Create main meeting folder
     std::fs::create_dir_all(&meeting_folder)?;
+    restrict_to_owner(&meeting_folder);
 
     // Only create .checkpoints subdirectory if requested (when auto_save is true)
     if create_checkpoints_dir {
         let checkpoints_dir = meeting_folder.join(".checkpoints");
         std::fs::create_dir_all(&checkpoints_dir)?;
+        restrict_to_owner(&checkpoints_dir);
         log::info!("Created meeting folder with checkpoints: {}", meeting_folder.display());
     } else {
         log::info!("Created meeting folder without checkpoints: {}", meeting_folder.display());

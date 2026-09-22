@@ -27,7 +27,7 @@
                 "default-src": "'self'",
                 "style-src": "'self' 'unsafe-inline'",
                 "img-src": "'self' asset: https://asset.localhost data:",
-                "connect-src": "'self' http://localhost:11434 http://localhost:5167 http://localhost:8178 https://api.ollama.ai"
+                "connect-src": "'self' http://localhost:11434 http://localhost:5167 http://localhost:8178"
             },
             "assetProtocol": {
                 "enable": true,
@@ -38,20 +38,11 @@
             "capabilities": [
                 {
                     "identifier": "main",
-                    "description": "Main window capability with file system and media access",
+                    "description": "Main window capability. File access is intentionally NOT granted here: no webview JS uses @tauri-apps/plugin-fs (security/reports/06-frontend-security.md §8 confirmed zero imports/invoke calls against it) — every real file operation (import, export, open-folder, database import) goes through purpose-built #[tauri::command] handlers instead, which are not gated by this capability list at all. The previous fs:read-all/fs:write-all/fs:default grant here was unused and would have let any future webview compromise (XSS, a malicious dependency) read/write arbitrary files under $APPDATA/* directly. Re-add a narrowly scoped fs:allow-* permission here only if a real feature needs the fs plugin specifically — not as a default.",
                     "windows": [
                         "main"
                     ],
                     "permissions": [
-                        "fs:default",
-                        "fs:allow-read-file",
-                        "fs:read-all",
-                        "fs:write-all",
-                        "fs:allow-app-read",
-                        "fs:allow-app-write",
-                        "fs:allow-download-write",
-                        "fs:allow-download-read",
-                        "fs:scope-download",
                         "core:path:default",
                         "core:event:default",
                         "core:window:default",
@@ -64,15 +55,7 @@
                         "notification:default",
                         "notification:allow-is-permission-granted",
                         "updater:default",
-                        "process:default",
-                        {
-                            "identifier": "fs:scope",
-                            "allow": [
-                                {
-                                    "path": "$APPDATA/*"
-                                }
-                            ]
-                        }
+                        "process:default"
                     ]
                 }
             ]
