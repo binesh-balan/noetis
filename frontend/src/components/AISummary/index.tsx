@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Summary, Block } from '@/types';
 import { Section } from './Section';
 import { EditableTitle } from '../EditableTitle';
@@ -592,17 +593,21 @@ export const AISummary = ({ summary, status, error, onSummaryChange, onRegenerat
     return markdown;
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    // Uses a native save dialog (via the export_text_content Tauri command) instead of
+    // a browser-style Blob download, which in the Tauri webview resolves to a fixed
+    // OS/browser default download location rather than a user-chosen path. See
+    // security/reports/08-data-protection.md §13.
     const markdown = convertToMarkdown();
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentSummary.title || 'ai-summary'}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      await invoke('export_text_content', {
+        content: markdown,
+        suggestedFilename: `${currentSummary.title || 'ai-summary'}.md`,
+        extension: 'md',
+      });
+    } catch (error) {
+      console.error('Failed to export summary:', error);
+    }
   };
 
   const renderErrorState = () => (

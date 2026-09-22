@@ -1227,6 +1227,52 @@ pub async fn open_external_url(url: String) -> Result<(), String> {
     }
 }
 
+/// Exports text content (a meeting summary) to a user-chosen location via a native save
+/// dialog, instead of a browser-style Blob download to a fixed/predictable location. See
+/// security/reports/08-data-protection.md §13: the frontend previously synthesized a
+/// `<a download>` click, which in the Tauri webview resolves to the OS/browser default
+/// download folder rather than letting the user pick where the export goes. Returns
+/// `Ok(false)` (not an error) if the user cancels the dialog.
+#[tauri::command]
+pub async fn export_text_content<R: Runtime>(
+    app: AppHandle<R>,
+    content: String,
+    suggested_filename: String,
+    extension: String,
+) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let filter_label = if extension.is_empty() {
+        "File".to_string()
+    } else {
+        extension.to_uppercase()
+    };
+    let filter_extensions: Vec<&str> = if extension.is_empty() {
+        vec!["*"]
+    } else {
+        vec![extension.as_str()]
+    };
+
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(&suggested_filename)
+        .add_filter(&filter_label, &filter_extensions)
+        .blocking_save_file();
+
+    let path = match file_path {
+        Some(path) => path,
+        None => return Ok(false), // user cancelled the dialog
+    };
+
+    let path_str = path.to_string();
+    std::fs::write(&path_str, content)
+        .map_err(|e| format!("Failed to write export file: {}", e))?;
+
+    log_info!("Exported content to {}", path_str);
+    Ok(true)
+}
+
 // ===== CUSTOM OPENAI API COMMANDS =====
 
 /// Saves the custom OpenAI configuration
