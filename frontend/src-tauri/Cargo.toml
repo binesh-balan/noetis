@@ -147,6 +147,13 @@ ffmpeg-sidecar = { git = "https://github.com/nathanbabcock/ffmpeg-sidecar", bran
 
 sqlx = { version = "0.8", features = [ "runtime-tokio", "sqlite", "chrono"] }
 
+# SHA-256 verification of downloaded model/binary files (already used as a
+# build-dependency by build/onnxruntime.rs; promoted to a regular dependency here so
+# runtime download paths — whisper_engine.rs, parakeet_engine.rs,
+# summary/summary_engine/model_manager.rs — can pin against known-good hashes too. See
+# security/reports/07-ai-security.md §1,2,4.
+sha2 = "0.10"
+
 # Common Tauri configuration
 tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset", "tray-icon"] }
 tauri-plugin-fs = "2.4.0"

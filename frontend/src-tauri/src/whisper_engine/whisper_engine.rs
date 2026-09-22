@@ -842,6 +842,59 @@ impl WhisperEngine {
         self.models_dir.clone()
     }
 
+    /// Pinned SHA-256 for each downloadable Whisper model, fetched from
+    /// https://huggingface.co/ggerganov/whisper.cpp's own git-lfs pointer metadata (not
+    /// self-computed) — closes the "size-heuristic + magic-number only, no cryptographic
+    /// hash" gap in security/reports/07-ai-security.md §1. If ggerganov/whisper.cpp ever
+    /// republishes one of these files with different content, this table must be updated
+    /// to match, or downloads of that model will start failing verification.
+    const WHISPER_MODEL_SHA256: &[(&str, &str)] = &[
+        ("tiny", "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"),
+        ("base", "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"),
+        ("small", "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
+        ("medium", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208"),
+        ("large-v3-turbo", "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"),
+        ("large-v3", "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2"),
+        ("tiny-q5_1", "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7"),
+        ("base-q5_1", "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898"),
+        ("small-q5_1", "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"),
+        ("medium-q5_0", "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f"),
+        ("large-v3-turbo-q5_0", "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
+        ("large-v3-q5_0", "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1"),
+    ];
+
+    /// Hashes `file_path` and compares against `expected_hex` (lowercase SHA-256 hex).
+    async fn verify_sha256(file_path: &PathBuf, expected_hex: &str) -> Result<()> {
+        use sha2::{Digest, Sha256};
+        use tokio::io::AsyncReadExt;
+
+        let mut file = fs::File::open(file_path)
+            .await
+            .map_err(|e| anyhow!("Failed to open downloaded file for hashing: {}", e))?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .await
+                .map_err(|e| anyhow!("Failed to read downloaded file for hashing: {}", e))?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+
+        let actual_hex = format!("{:x}", hasher.finalize());
+        if actual_hex != expected_hex {
+            return Err(anyhow!(
+                "Downloaded model file has SHA-256 {}, expected {} — refusing a tampered or corrupted download",
+                actual_hex,
+                expected_hex
+            ));
+        }
+        Ok(())
+    }
+
     /// Validate if a model file is a valid GGML file by checking its header
     async fn validate_model_file(&self, model_path: &PathBuf) -> Result<()> {
         use tokio::io::AsyncReadExt;
@@ -992,6 +1045,18 @@ impl WhisperEngine {
                         model_name
                     )),
                 };
+            }
+
+            if result.is_ok() {
+                if let Some((_, expected_sha256)) = Self::WHISPER_MODEL_SHA256
+                    .iter()
+                    .find(|(name, _)| *name == model_name)
+                {
+                    result = Self::verify_sha256(file_path, expected_sha256).await;
+                }
+                // No entry in the table (shouldn't happen for a model that passed the
+                // size check above, since both tables are keyed off the same catalog) —
+                // fall through with the existing Ok(()) rather than a hard failure.
             }
         }
 

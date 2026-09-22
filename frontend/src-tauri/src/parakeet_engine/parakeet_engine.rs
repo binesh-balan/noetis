@@ -85,6 +85,14 @@ pub struct ModelInfo {
 struct ArtifactSpec {
     filename: &'static str,
     exact_bytes: u64,
+    /// Pinned SHA-256 (lowercase hex), when known. `None` for the v3 artifacts: they're
+    /// served from a non-HuggingFace host (meetily.towardsgeneralintelligence.com) with
+    /// no git-lfs-pointer-style metadata endpoint to fetch a hash from without
+    /// downloading the full ~650MB file, which wasn't done here — see
+    /// security/reports/07-ai-security.md §2 and security/RESIDUAL_RISKS.md. The v2
+    /// artifacts are pinned against HuggingFace's own git-lfs oid for the exact commit
+    /// this crate already downloads from (`0bbb45a3...`).
+    sha256: Option<&'static str>,
 }
 
 struct ModelSpec {
@@ -104,17 +112,36 @@ impl ModelSpec {
 }
 
 const PARAKEET_V3_ARTIFACTS: &[ArtifactSpec] = &[
-    ArtifactSpec { filename: "encoder-model.int8.onnx", exact_bytes: 652_183_999 },
-    ArtifactSpec { filename: "decoder_joint-model.int8.onnx", exact_bytes: 18_202_004 },
-    ArtifactSpec { filename: "nemo128.onnx", exact_bytes: 139_764 },
-    ArtifactSpec { filename: "vocab.txt", exact_bytes: 93_939 },
+    ArtifactSpec { filename: "encoder-model.int8.onnx", exact_bytes: 652_183_999, sha256: None },
+    ArtifactSpec { filename: "decoder_joint-model.int8.onnx", exact_bytes: 18_202_004, sha256: None },
+    ArtifactSpec { filename: "nemo128.onnx", exact_bytes: 139_764, sha256: None },
+    ArtifactSpec { filename: "vocab.txt", exact_bytes: 93_939, sha256: None },
 ];
 
+// SHA-256 values fetched from HuggingFace's git-lfs pointer metadata for
+// istupakov/parakeet-tdt-0.6b-v2-onnx at the exact pinned commit this crate downloads
+// from (0bbb45a3365852604aef28b538a8f066f4ccaa85) — not self-computed.
 const PARAKEET_V2_ARTIFACTS: &[ArtifactSpec] = &[
-    ArtifactSpec { filename: "encoder-model.int8.onnx", exact_bytes: 652_184_014 },
-    ArtifactSpec { filename: "decoder_joint-model.int8.onnx", exact_bytes: 8_998_286 },
-    ArtifactSpec { filename: "nemo128.onnx", exact_bytes: 139_764 },
-    ArtifactSpec { filename: "vocab.txt", exact_bytes: 9_384 },
+    ArtifactSpec {
+        filename: "encoder-model.int8.onnx",
+        exact_bytes: 652_184_014,
+        sha256: Some("3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155"),
+    },
+    ArtifactSpec {
+        filename: "decoder_joint-model.int8.onnx",
+        exact_bytes: 8_998_286,
+        sha256: Some("a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3"),
+    },
+    ArtifactSpec {
+        filename: "nemo128.onnx",
+        exact_bytes: 139_764,
+        sha256: Some("a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f"),
+    },
+    ArtifactSpec {
+        filename: "vocab.txt",
+        exact_bytes: 9_384,
+        sha256: Some("ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d"),
+    },
 ];
 
 const PARAKEET_MODEL_SPECS: &[ModelSpec] = &[
@@ -425,6 +452,46 @@ impl ParakeetEngine {
             }
         }
 
+        Ok(())
+    }
+
+    /// Hashes `file_path` and compares against `expected_sha256` (lowercase hex),
+    /// closing the "byte-size heuristic only, no cryptographic hash" gap noted in
+    /// security/reports/07-ai-security.md §2 for artifacts where a pinned hash is known
+    /// (see ArtifactSpec::sha256 above).
+    async fn verify_artifact_sha256(
+        file_path: &Path,
+        filename: &str,
+        expected_sha256: &str,
+    ) -> Result<()> {
+        use sha2::{Digest, Sha256};
+        use tokio::io::AsyncReadExt;
+
+        let mut file = fs::File::open(file_path)
+            .await
+            .map_err(|error| anyhow!("Failed to open {} for hashing: {}", filename, error))?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .await
+                .map_err(|error| anyhow!("Failed to read {} for hashing: {}", filename, error))?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+
+        let actual_sha256 = format!("{:x}", hasher.finalize());
+        if actual_sha256 != expected_sha256 {
+            return Err(anyhow!(
+                "{} has SHA-256 {}, expected {} — refusing a tampered or corrupted download",
+                filename,
+                actual_sha256,
+                expected_sha256
+            ));
+        }
         Ok(())
     }
 
@@ -1109,6 +1176,10 @@ impl ParakeetEngine {
                     artifact.exact_bytes
                 ));
             }
+
+            if let Some(expected_sha256) = artifact.sha256 {
+                Self::verify_artifact_sha256(&file_path, artifact.filename, expected_sha256).await?;
+            }
         }
 
         if confirmed_bytes != total_bytes {
@@ -1239,10 +1310,10 @@ mod tests {
     use tokio::sync::oneshot;
     const TEST_MODEL_NAME: &str = "parakeet-test";
     const SMALL_ARTIFACTS: &[ArtifactSpec] = &[
-        ArtifactSpec { filename: "encoder.bin", exact_bytes: 4 },
-        ArtifactSpec { filename: "decoder.bin", exact_bytes: 3 },
-        ArtifactSpec { filename: "nemo.bin", exact_bytes: 2 },
-        ArtifactSpec { filename: "vocab.txt", exact_bytes: 1 },
+        ArtifactSpec { filename: "encoder.bin", exact_bytes: 4, sha256: None },
+        ArtifactSpec { filename: "decoder.bin", exact_bytes: 3, sha256: None },
+        ArtifactSpec { filename: "nemo.bin", exact_bytes: 2, sha256: None },
+        ArtifactSpec { filename: "vocab.txt", exact_bytes: 1, sha256: None },
     ];
     const SMALL_MODEL_SPECS: &[ModelSpec] = &[ModelSpec {
         name: TEST_MODEL_NAME,
@@ -1562,6 +1633,7 @@ mod tests {
         const ARTIFACTS: &[ArtifactSpec] = &[ArtifactSpec {
             filename: "near.bin",
             exact_bytes: 100,
+            sha256: None,
         }];
         const PREFIX: &[u8] = &[b'A'; 99];
 
@@ -1655,6 +1727,7 @@ mod tests {
         const ARTIFACTS: &[ArtifactSpec] = &[ArtifactSpec {
             filename: "model.bin",
             exact_bytes: 4,
+            sha256: None,
         }];
         let (_temp_dir, engine, model_dir) = test_engine().await;
         fs::create_dir_all(&model_dir).await.expect("create model directory");
@@ -1698,6 +1771,7 @@ mod tests {
         const ARTIFACTS: &[ArtifactSpec] = &[ArtifactSpec {
             filename: "model.bin",
             exact_bytes: 4,
+            sha256: None,
         }];
         let (_temp_dir, engine, model_dir) = test_engine().await;
         fs::create_dir_all(&model_dir).await.expect("create model directory");
@@ -1743,10 +1817,12 @@ mod tests {
             ArtifactSpec {
                 filename: "complete.bin",
                 exact_bytes: 1,
+                sha256: None,
             },
             ArtifactSpec {
                 filename: "target.bin",
                 exact_bytes: 4,
+                sha256: None,
             },
         ];
         let cases = vec![
@@ -1886,6 +1962,7 @@ mod tests {
         const ARTIFACTS: &[ArtifactSpec] = &[ArtifactSpec {
             filename: "model.bin",
             exact_bytes: 4,
+            sha256: None,
         }];
         let (_temp_dir, engine, model_dir) = test_engine().await;
         let hook = Arc::new(DownloadStateTestHook {

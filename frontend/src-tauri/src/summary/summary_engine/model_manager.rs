@@ -730,7 +730,10 @@ impl ModelManager {
         // Small delay to ensure UI receives 100% event
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        if let Err(e) = self.validate_gguf_file(&file_path).await {
+        if let Err(e) = self
+            .validate_gguf_file(&file_path, model_def.sha256.as_deref())
+            .await
+        {
             log::error!("Downloaded file failed validation: {}", e);
 
             // Clean up invalid file
@@ -769,27 +772,58 @@ impl ModelManager {
         Ok(())
     }
 
-    /// Validate that a file is a valid GGUF model
-    async fn validate_gguf_file(&self, path: &PathBuf) -> Result<()> {
+    /// Validate that a file is a valid GGUF model, and — when `expected_sha256` is
+    /// `Some` — that its content matches a pinned hash. Closes the "size-heuristic +
+    /// magic-number only, no cryptographic hash" gap in
+    /// security/reports/07-ai-security.md §4; see ModelDef::sha256.
+    async fn validate_gguf_file(&self, path: &PathBuf, expected_sha256: Option<&str>) -> Result<()> {
+        use tokio::io::AsyncReadExt;
+
         let mut file = fs::File::open(path).await?;
 
         // Read first 4 bytes to check for GGUF magic number
-        use tokio::io::AsyncReadExt;
         let mut magic = [0u8; 4];
         file.read_exact(&mut magic).await?;
 
         // GGUF magic number is "GGUF" (0x47475546)
-        if &magic == b"GGUF" {
-            Ok(())
-        } else if &magic == b"ggjt" || &magic == b"ggla" || &magic == b"ggml" {
-            // Older formats (GGML, GGJT)
-            Ok(())
+        if &magic == b"GGUF" || &magic == b"ggjt" || &magic == b"ggla" || &magic == b"ggml" {
+            // Older formats (GGML, GGJT) also accepted above.
         } else {
-            Err(anyhow!(
+            return Err(anyhow!(
                 "Invalid model file: magic number {:?} doesn't match GGUF/GGML",
                 magic
-            ))
+            ));
         }
+
+        if let Some(expected_sha256) = expected_sha256 {
+            use sha2::{Digest, Sha256};
+            use tokio::io::AsyncSeekExt;
+
+            // Rewind: the magic-number read above already consumed the first 4 bytes,
+            // and the hash must cover the whole file, not just what's left unread.
+            file.seek(std::io::SeekFrom::Start(0)).await?;
+
+            let mut hasher = Sha256::new();
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let read = file.read(&mut buffer).await?;
+                if read == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..read]);
+            }
+
+            let actual_sha256 = format!("{:x}", hasher.finalize());
+            if actual_sha256 != expected_sha256 {
+                return Err(anyhow!(
+                    "Downloaded model file has SHA-256 {}, expected {} — refusing a tampered or corrupted download",
+                    actual_sha256,
+                    expected_sha256
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// Cancel an ongoing download
