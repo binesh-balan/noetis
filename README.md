@@ -268,6 +268,9 @@ MIT License - Feel free to use this project for your own purposes.
 - We borrowed some code from [transcribe-rs](https://crates.io/crates/transcribe-rs).
 - Thanks to **NVIDIA** for developing the **Parakeet** model.
 - Thanks to [istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) for providing the **ONNX conversion** of the Parakeet model.
+- The optional built-in/on-device summarization models are third-party GGUF quantizations, each under its own upstream license — review the linked license before enabling one:
+  - [Qwen3.5](https://huggingface.co/unsloth/Qwen3.5-2B-Instruct-GGUF) (quantized by [unsloth](https://huggingface.co/unsloth)) — Alibaba's [Qwen License](https://huggingface.co/Qwen/Qwen3.5-2B-Instruct/blob/main/LICENSE).
+  - [Gemma 3](https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF) (quantized by [bartowski](https://huggingface.co/bartowski)) — Google's [Gemma Terms of Use](https://ai.google.dev/gemma/terms), which include usage restrictions beyond a standard open-source license.
 
 ## Star History
 

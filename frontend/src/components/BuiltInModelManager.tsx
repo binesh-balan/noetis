@@ -280,6 +280,21 @@ export function BuiltInModelManager({
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-sm font-bold">Built-in AI Models</h4>
       </div>
+      <p className="text-xs text-gray-500 mb-4">
+        These are third-party model files, each under its own license — see the{' '}
+        <button
+          type="button"
+          onClick={() =>
+            invoke('open_external_url', {
+              url: 'https://github.com/binesh-balan/noetis#acknowledgments',
+            })
+          }
+          className="underline hover:text-gray-700"
+        >
+          Acknowledgments section of the README
+        </button>
+        {' '}before use. Gemma models in particular carry Google&apos;s Gemma Terms of Use, which include usage restrictions beyond a standard open-source license.
+      </p>
 
       <div
         className={cn(
