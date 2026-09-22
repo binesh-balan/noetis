@@ -754,6 +754,48 @@ pub async fn api_delete_api_key<R: Runtime>(
     }
 }
 
+/// Reads the persisted Strict Offline Mode setting (security/RESIDUAL_RISKS.md #3).
+#[tauri::command]
+pub async fn api_get_strict_offline_mode<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    SettingsRepository::get_strict_offline_mode(state.db_manager.pool())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Persists Strict Offline Mode and immediately updates the in-memory flag that
+/// generate_summary/the update checker actually read (network_policy), so the change
+/// takes effect without an app restart.
+#[tauri::command]
+pub async fn api_set_strict_offline_mode<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    SettingsRepository::set_strict_offline_mode(state.db_manager.pool(), enabled)
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::network_policy::set_strict_offline(enabled);
+    log_info!("Strict Offline Mode set to {}", enabled);
+    Ok(())
+}
+
+/// Clears every stored cloud provider API key in one action
+/// (security/RESIDUAL_RISKS.md #3 — previously no such action existed).
+#[tauri::command]
+pub async fn api_forget_all_api_keys<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    SettingsRepository::forget_all_api_keys(state.db_manager.pool())
+        .await
+        .map_err(|e| e.to_string())?;
+    log_info!("Cleared all stored provider API keys");
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn api_delete_meeting<R: Runtime>(
     _app: AppHandle<R>,

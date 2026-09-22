@@ -77,6 +77,45 @@ fn is_localhost_endpoint(endpoint: Option<&str>) -> bool {
     }
 }
 
+/// Resolves the host in `url` and checks that every address it resolves to is a
+/// loopback address (127.0.0.0/8 or ::1). Unlike [`is_localhost_endpoint`] — a substring
+/// check on the URL text, used only to decide a CLI-fallback path, never to restrict
+/// anything — this actually performs DNS resolution and inspects the resulting IPs, so
+/// it isn't fooled by a hostname that merely contains "localhost" as a substring of
+/// something else, and correctly rejects a hostname that resolves to a real remote
+/// address no matter what it's spelled like. Used to enforce Strict Offline Mode's
+/// "Ollama must be genuinely local" requirement — see
+/// security/reports/03-offline-architecture.md §3 and security/RESIDUAL_RISKS.md #3.
+pub(crate) async fn resolve_to_loopback_only(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid endpoint URL: {}", e))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "Endpoint URL has no host".to_string())?
+        .to_string();
+    let port = parsed.port_or_known_default().unwrap_or(80);
+
+    let addrs = tokio::net::lookup_host((host.as_str(), port))
+        .await
+        .map_err(|e| format!("Failed to resolve host '{}': {}", host, e))?
+        .collect::<Vec<_>>();
+
+    if addrs.is_empty() {
+        return Err(format!("Host '{}' did not resolve to any address", host));
+    }
+
+    for addr in &addrs {
+        if !addr.ip().is_loopback() {
+            return Err(format!(
+                "endpoint host '{}' resolved to non-loopback address {} — only a genuinely local Ollama instance (127.0.0.1/::1) is allowed",
+                host,
+                addr.ip()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 // Helper function to validate endpoint URL format
 fn validate_endpoint_url(url: &str) -> Result<(), OllamaError> {
     if url.is_empty() {

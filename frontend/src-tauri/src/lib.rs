@@ -41,6 +41,7 @@ pub mod audio;
 pub mod config;
 pub mod console_utils;
 pub mod database;
+pub mod network_policy;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
@@ -586,6 +587,19 @@ pub fn run() {
             })
             .expect("Failed to initialize database");
 
+            // Load the persisted Strict Offline Mode flag into the in-memory copy that
+            // generate_summary/the update checker actually read (network_policy) — must
+            // run after the database is initialized (just above), since it reads the
+            // settings table.
+            if let Some(app_state) = _app.handle().try_state::<state::AppState>() {
+                let pool = app_state.db_manager.pool().clone();
+                tauri::async_runtime::block_on(async move {
+                    network_policy::sync_from_db(&pool).await;
+                });
+            } else {
+                log::warn!("AppState not available to load Strict Offline Mode setting; defaulting to off");
+            }
+
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");
             if let Ok(resource_path) = _app.handle().path().resource_dir() {
@@ -737,6 +751,9 @@ pub fn run() {
             api::debug_backend_connection,
             api::open_external_url,
             api::export_text_content,
+            api::api_get_strict_offline_mode,
+            api::api_set_strict_offline_mode,
+            api::api_forget_all_api_keys,
             // Custom OpenAI commands
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,

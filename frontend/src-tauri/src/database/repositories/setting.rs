@@ -78,6 +78,74 @@ impl SettingsRepository {
         Ok(setting)
     }
 
+    /// Reads the Strict Offline Mode flag (security/reports/03-offline-architecture.md,
+    /// security/RESIDUAL_RISKS.md #3). Defaults to `false` when no settings row exists
+    /// yet, matching this app's existing default-permissive behavior.
+    pub async fn get_strict_offline_mode(
+        pool: &SqlitePool,
+    ) -> std::result::Result<bool, sqlx::Error> {
+        let value: Option<i64> =
+            sqlx::query_scalar("SELECT strictOfflineMode FROM settings WHERE id = '1' LIMIT 1")
+                .fetch_optional(pool)
+                .await?;
+        Ok(value.unwrap_or(0) != 0)
+    }
+
+    pub async fn set_strict_offline_mode(
+        pool: &SqlitePool,
+        enabled: bool,
+    ) -> std::result::Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO settings (id, provider, model, whisperModel, strictOfflineMode)
+            VALUES ('1', 'openai', 'gpt-4o-2024-11-20', 'large-v3', $1)
+            ON CONFLICT(id) DO UPDATE SET
+                strictOfflineMode = $1
+            "#,
+        )
+        .bind(enabled as i64)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Clears every stored cloud provider API key (and the custom-OpenAI config, which
+    /// embeds its own key) in one call. Addresses the "no UI action to purge stored
+    /// credentials" gap noted in security/reports/03-offline-architecture.md §1.
+    pub async fn forget_all_api_keys(pool: &SqlitePool) -> std::result::Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE settings SET
+                openaiApiKey = NULL,
+                anthropicApiKey = NULL,
+                ollamaApiKey = NULL,
+                groqApiKey = NULL,
+                openRouterApiKey = NULL,
+                geminiApiKey = NULL,
+                customOpenAIConfig = NULL
+            WHERE id = '1'
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE transcript_settings SET
+                whisperApiKey = NULL,
+                deepgramApiKey = NULL,
+                elevenLabsApiKey = NULL,
+                groqApiKey = NULL,
+                openaiApiKey = NULL
+            WHERE id = '1'
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn save_model_config(
         pool: &SqlitePool,
         provider: &str,

@@ -298,6 +298,34 @@ pub(crate) async fn generate_summary(
         .map_err(|e| e.to_string());
     }
 
+    // Strict Offline Mode (security/reports/03-offline-architecture.md,
+    // security/RESIDUAL_RISKS.md #3): block every cloud provider outright, and require
+    // the Ollama endpoint to actually resolve to a loopback address — not just "contains
+    // the substring localhost", which is what the app validated before this.
+    if crate::network_policy::is_strict_offline() {
+        match provider {
+            LLMProvider::OpenAI
+            | LLMProvider::Claude
+            | LLMProvider::Groq
+            | LLMProvider::OpenRouter
+            | LLMProvider::CustomOpenAI => {
+                return Err(format!(
+                    "Strict Offline Mode is enabled — {:?} requires an internet connection and is blocked. Disable Strict Offline Mode in Settings to use it.",
+                    provider
+                ));
+            }
+            LLMProvider::Ollama => {
+                let host = ollama_endpoint.unwrap_or("http://localhost:11434");
+                crate::ollama::resolve_to_loopback_only(host)
+                    .await
+                    .map_err(|e| format!("Strict Offline Mode: {}", e))?;
+            }
+            LLMProvider::BuiltInAI => {
+                // Unreachable: handled by the early return above.
+            }
+        }
+    }
+
     let (api_url, mut headers) = match provider {
         LLMProvider::OpenAI => (
             "https://api.openai.com/v1/chat/completions".to_string(),
