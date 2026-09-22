@@ -93,6 +93,7 @@ impl SettingsRepository {
             }
         };
 
+        let protected_key = crate::secure_storage::protect(api_key);
         let query = format!(
             r#"
             INSERT INTO settings (id, provider, model, whisperModel, "{}")
@@ -102,7 +103,7 @@ impl SettingsRepository {
             "#,
             api_key_column, api_key_column
         );
-        sqlx::query(&query).bind(api_key).execute(pool).await?;
+        sqlx::query(&query).bind(protected_key).execute(pool).await?;
 
         Ok(())
     }
@@ -135,8 +136,8 @@ impl SettingsRepository {
             "SELECT {} FROM settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
-        Ok(api_key)
+        let stored: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        Ok(stored.map(|value| crate::secure_storage::unprotect(&value)))
     }
 
     pub async fn get_transcript_config(
@@ -191,6 +192,7 @@ impl SettingsRepository {
             }
         };
 
+        let protected_key = crate::secure_storage::protect(api_key);
         let query = format!(
             r#"
             INSERT INTO transcript_settings (id, provider, model, "{}")
@@ -200,7 +202,7 @@ impl SettingsRepository {
             "#,
             api_key_column, crate::config::DEFAULT_PARAKEET_MODEL, api_key_column
         );
-        sqlx::query(&query).bind(api_key).execute(pool).await?;
+        sqlx::query(&query).bind(protected_key).execute(pool).await?;
 
         Ok(())
     }
@@ -227,8 +229,8 @@ impl SettingsRepository {
             "SELECT {} FROM transcript_settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
-        Ok(api_key)
+        let stored: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        Ok(stored.map(|value| crate::secure_storage::unprotect(&value)))
     }
 
     pub async fn delete_api_key(
@@ -296,10 +298,14 @@ impl SettingsRepository {
 
                 if let Some(json) = config_json {
                     // Parse JSON into CustomOpenAIConfig
-                    let config: CustomOpenAIConfig = serde_json::from_str(&json)
+                    let mut config: CustomOpenAIConfig = serde_json::from_str(&json)
                         .map_err(|e| sqlx::Error::Protocol(
                             format!("Invalid JSON in customOpenAIConfig: {}", e).into()
                         ))?;
+
+                    if let Some(key) = config.api_key.as_deref() {
+                        config.api_key = Some(crate::secure_storage::unprotect(key));
+                    }
 
                     Ok(Some(config))
                 } else {
@@ -323,8 +329,19 @@ impl SettingsRepository {
         pool: &SqlitePool,
         config: &CustomOpenAIConfig,
     ) -> std::result::Result<(), sqlx::Error> {
-        // Serialize config to JSON
-        let config_json = serde_json::to_string(config)
+        // Serialize config to JSON, protecting the embedded API key at rest the same way
+        // the plain settings columns are protected (see secure_storage).
+        let mut config_value = serde_json::to_value(config)
+            .map_err(|e| sqlx::Error::Protocol(
+                format!("Failed to serialize config to JSON: {}", e).into()
+            ))?;
+        if let Some(obj) = config_value.as_object_mut() {
+            if let Some(plaintext_key) = obj.get("apiKey").and_then(|v| v.as_str()) {
+                let protected = crate::secure_storage::protect(plaintext_key);
+                obj.insert("apiKey".to_string(), serde_json::Value::String(protected));
+            }
+        }
+        let config_json = serde_json::to_string(&config_value)
             .map_err(|e| sqlx::Error::Protocol(
                 format!("Failed to serialize config to JSON: {}", e).into()
             ))?;

@@ -570,6 +570,18 @@ pub async fn api_save_model_config<R: Runtime>(
     )
 }
 
+// SECURITY NOTE: this command returns the stored provider API key in plaintext to
+// whatever JS calls it. There is currently no additional gate beyond the Tauri IPC
+// boundary itself (the `_auth_token` parameter below is accepted but not checked — no
+// session-token infrastructure exists to validate it against). This is the accepted
+// trust model for this app today: the webview and the Rust backend are treated as one
+// trust domain, consistent with how Tauri's own plugin capability system works (it
+// governs plugin commands, not custom #[tauri::command] functions like this one). The
+// key is still protected at rest (see `secure_storage::protect`) so a webview
+// compromise is the only way to reach this value — reading the SQLite file directly, or
+// copying the app's data directory elsewhere, no longer yields the plaintext key on
+// Windows. If a real per-session credential is ever introduced, wire it into
+// `_auth_token` and reject calls that don't present it.
 #[tauri::command]
 pub async fn api_get_api_key<R: Runtime>(
     _app: AppHandle<R>,
@@ -683,6 +695,8 @@ pub async fn api_save_transcript_config<R: Runtime>(
     )
 }
 
+// SECURITY NOTE: same accepted trust model as `api_get_api_key` above — see that
+// comment. Key is protected at rest via `secure_storage::protect`.
 #[tauri::command]
 pub async fn api_get_transcript_api_key<R: Runtime>(
     _app: AppHandle<R>,
@@ -756,14 +770,44 @@ pub async fn api_delete_meeting<R: Runtime>(
     let pool = state.db_manager.pool();
 
     match MeetingsRepository::delete_meeting(pool, &meeting_id).await {
-        Ok(true) => {
+        Ok(Some(deleted)) => {
             log_info!("Successfully deleted meeting {}", meeting_id);
+
+            // The DB rows are gone; also remove the on-disk recording folder
+            // (audio.mp4/transcripts.json/metadata.json) so deleted meeting content
+            // doesn't linger indefinitely. Best-effort: a failure here shouldn't undo
+            // the already-committed DB deletion, just surface a warning.
+            if let Some(folder_path) = deleted.folder_path {
+                if !folder_path.is_empty() {
+                    let path = std::path::PathBuf::from(&folder_path);
+                    if path.exists() {
+                        match std::fs::remove_dir_all(&path) {
+                            Ok(()) => {
+                                log_info!(
+                                    "Removed recording folder for deleted meeting {}: {}",
+                                    meeting_id,
+                                    folder_path
+                                );
+                            }
+                            Err(e) => {
+                                log_warn!(
+                                    "Deleted meeting {} from database but failed to remove its recording folder {}: {}",
+                                    meeting_id,
+                                    folder_path,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             Ok(serde_json::json!({
                 "status": "success",
                 "message": "Meeting deleted successfully"
             }))
         }
-        Ok(false) => {
+        Ok(None) => {
             log_warn!("Meeting not found or already deleted: {}", meeting_id);
             Err(format!(
                 "Meeting not found or could not be deleted: {}",

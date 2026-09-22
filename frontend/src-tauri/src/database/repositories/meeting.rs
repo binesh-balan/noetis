@@ -6,6 +6,14 @@ use tracing::{error, info};
 
 pub struct MeetingsRepository;
 
+/// Result of a successful `delete_meeting` call — carries the on-disk recording folder
+/// (if one was recorded) so the caller can remove it too. Deleting only the DB rows and
+/// leaving `audio.mp4`/`transcripts.json`/`metadata.json` behind was a data-retention gap:
+/// see security/reports/08-data-protection.md §14.
+pub struct DeletedMeeting {
+    pub folder_path: Option<String>,
+}
+
 impl MeetingsRepository {
     pub async fn get_meetings(pool: &SqlitePool) -> Result<Vec<MeetingModel>, sqlx::Error> {
         let meetings =
@@ -15,7 +23,10 @@ impl MeetingsRepository {
         Ok(meetings)
     }
 
-    pub async fn delete_meeting(pool: &SqlitePool, meeting_id: &str) -> Result<bool, SqlxError> {
+    pub async fn delete_meeting(
+        pool: &SqlitePool,
+        meeting_id: &str,
+    ) -> Result<Option<DeletedMeeting>, SqlxError> {
         if meeting_id.trim().is_empty() {
             return Err(SqlxError::Protocol(
                 "meeting_id cannot be empty".to_string(),
@@ -26,18 +37,17 @@ impl MeetingsRepository {
         let mut transaction = conn.begin().await?;
 
         match delete_meeting_with_transaction(&mut transaction, meeting_id).await {
-            Ok(success) => {
-                if success {
-                    transaction.commit().await?;
-                    info!(
-                        "Successfully deleted meeting {} and all associated data",
-                        meeting_id
-                    );
-                    Ok(true)
-                } else {
-                    transaction.rollback().await?;
-                    Ok(false)
-                }
+            Ok(Some(folder_path)) => {
+                transaction.commit().await?;
+                info!(
+                    "Successfully deleted meeting {} and all associated data",
+                    meeting_id
+                );
+                Ok(Some(DeletedMeeting { folder_path }))
+            }
+            Ok(None) => {
+                transaction.rollback().await?;
+                Ok(None)
             }
             Err(e) => {
                 let _ = transaction.rollback().await;
@@ -233,17 +243,22 @@ impl MeetingsRepository {
 async fn delete_meeting_with_transaction(
     transaction: &mut SqliteConnection,
     meeting_id: &str,
-) -> Result<bool, SqlxError> {
-    // Check if meeting exists
-    let meeting_exists: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM meetings WHERE id = ?")
-        .bind(meeting_id)
-        .fetch_optional(&mut *transaction)
-        .await?;
+) -> Result<Option<Option<String>>, SqlxError> {
+    // Look up the meeting (and its on-disk folder, if any) instead of just checking
+    // existence, so the caller can remove that folder after the DB rows are gone.
+    let meeting_row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT folder_path FROM meetings WHERE id = ?")
+            .bind(meeting_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
 
-    if meeting_exists.is_none() {
-        error!("Meeting {} not found for deletion", meeting_id);
-        return Ok(false);
-    }
+    let folder_path = match meeting_row {
+        Some((folder_path,)) => folder_path,
+        None => {
+            error!("Meeting {} not found for deletion", meeting_id);
+            return Ok(None);
+        }
+    };
 
     // Delete from related tables in proper order
     // 1. Delete from transcript_chunks
@@ -270,5 +285,9 @@ async fn delete_meeting_with_transaction(
         .execute(&mut *transaction)
         .await?;
 
-    Ok(result.rows_affected() > 0)
+    if result.rows_affected() > 0 {
+        Ok(Some(folder_path))
+    } else {
+        Ok(None)
+    }
 }
