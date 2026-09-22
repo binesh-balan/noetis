@@ -408,7 +408,7 @@ jobs:
           # Check environment variables
           Write-Host "Environment Variables:"
           Write-Host "  SM_HOST: $env:SM_HOST"
-          Write-Host "  SM_API_KEY: $($env:SM_API_KEY.Substring(0, [Math]::Min(20, $env:SM_API_KEY.Length)))..."
+          Write-Host "  SM_API_KEY: $(if ($env:SM_API_KEY) { '***SET***' } else { 'NOT SET' })"
           Write-Host "  SM_CLIENT_CERT_FILE: $env:SM_CLIENT_CERT_FILE"
           Write-Host "  SM_CLIENT_CERT_PASSWORD: $(if ($env:SM_CLIENT_CERT_PASSWORD) { '***SET***' } else { 'NOT SET' })"
           Write-Host ""
@@ -627,6 +627,40 @@ jobs:
           releaseName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
           releaseId: ${{ inputs.release-id }}
           args: ${{ inputs.build-args }} ${{ steps.build-features.outputs.features }} ${{ steps.windows-portability.outputs.args }}
+
+      # Verifies the actual installer that gets uploaded/released, not a synthetic
+      # pre-flight test binary. Mirrors the equivalent checks that already exist in
+      # build-devtest.yml (see security/reports/09-supply-chain.md §7) — this workflow
+      # (called by release.yml and build-test.yml) previously had no post-build
+      # verification at all between "Build with Tauri" and artifact upload.
+      - name: Verify code signing (macOS)
+        if: contains(inputs.platform, 'macos') && inputs.sign-binaries
+        run: |
+          APP_PATH=$(find target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/macos -name "*.app" | head -1)
+          if [ -n "$APP_PATH" ]; then
+            echo "=== Verifying App Bundle: $APP_PATH ==="
+            codesign --verify --deep --strict "$APP_PATH" && echo "Code signature is valid"
+            spctl -a -vvv "$APP_PATH" && echo "App is notarized and accepted by Gatekeeper"
+          else
+            echo "::warning::No .app bundle found to verify"
+          fi
+
+      - name: Verify code signing (Windows)
+        if: contains(inputs.platform, 'windows') && inputs.sign-binaries
+        shell: pwsh
+        run: |
+          $msiPath = Get-ChildItem -Path "target/${{ steps.build-profile.outputs.profile }}/bundle/msi" -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if ($msiPath) {
+            $sig = Get-AuthenticodeSignature -FilePath "$msiPath"
+            Write-Host "Verifying MSI signature: $msiPath"
+            $sig | Format-List
+            if ($sig.Status -ne 'Valid') {
+              Write-Error "MSI signature status is '$($sig.Status)', expected 'Valid'"
+              exit 1
+            }
+          } else {
+            Write-Warning "No .msi found to verify"
+          }
 
       - name: Upload artifacts (macOS)
         if: inputs.upload-artifacts && contains(inputs.platform, 'macos')
