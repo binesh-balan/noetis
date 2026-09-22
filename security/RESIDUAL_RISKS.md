@@ -1,45 +1,38 @@
 # Residual Risks
 
-Everything below is a known, open item after this audit pass. Nothing here has been fixed. Ordered roughly by severity; full evidence is in the linked phase report.
+All 18 findings from the Phase 1-9 audit now have a remediation (see `REMEDIATION_LOG.md`). This document lists what's still genuinely open after that pass — either because a finding was only partially closed, or because closing it fully needs something this environment doesn't have (a compiler, a large blind download, infrastructure the repo owner controls).
 
-## Carried over from remediated findings
+## Not verified by compilation — the biggest open item
 
-| Risk | Detail | Source |
-|---|---|---|
-| macOS/Linux API keys still plaintext | `secure_storage.rs`'s DPAPI protection is Windows-only. Documented upgrade path: `keyring` crate (Credential Manager/Keychain/libsecret) once a build environment exists to verify it compiles on every target. | `REMEDIATION_LOG.md` #1 |
-| Webview→backend IPC has no auth gate | Documented as an accepted trust model, not eliminated. A webview compromise still reaches `api_get_api_key` and gets the plaintext key back (decrypted server-side before return). | `REMEDIATION_LOG.md` #1, `THREAT_MODEL.md` |
-| Neither fix has been compiled | `cargo`/`rustc` are not installed in the audit environment. Both changes were written and manually traced against known-stable APIs and existing codebase patterns, but **have not built or run**. | `REMEDIATION_LOG.md` |
-| `meeting_notes` may still orphan on delete | `PRAGMA foreign_keys` is never enabled for the SQLite connection, so the `ON DELETE CASCADE` on `meeting_notes` may not fire. Not touched by the Finding #2 fix. | `security/reports/08-data-protection.md` §4 |
-| SQLite journal/WAL may retain deleted bytes | No `PRAGMA secure_delete=ON` or `VACUUM` anywhere in `database/`. Filesystem/hardware-level recovery is out of scope for any application-level fix. | `security/reports/08-data-protection.md` §14 |
+**Nothing in this session's ~15 commits of Rust changes has been compiled.** No Rust toolchain is installed in the environment this audit ran in. Every change was traced manually against known-stable APIs (Win32 DPAPI, GitHub/HuggingFace's own published hashes, this codebase's existing conventions) and, where possible, cross-checked programmatically (every struct literal confirmed to include new required fields; every hash string confirmed to be exactly 64 hex characters). Frontend/TypeScript changes were verified with `npx tsc --noEmit` (zero errors) since Node was available. CI workflow YAML was validated as syntactically correct YAML.
 
-## Not yet addressed (repo owner chose to fix #1/#2 first)
+**Before merging any of this: run `cargo check` (at minimum) against both workspace members (`frontend/src-tauri`, `llama-helper`).** Fix anything that fails to compile before treating any of the remediations above as done.
 
-| # | Risk | Severity | Source |
-|---|---|---|---|
-| 3 | No strict offline mode exists — no global flag, no centralized outbound gate (~10 independent HTTP clients), Ollama/custom-OpenAI endpoints accept any URL with no loopback restriction | MEDIUM-HIGH | `security/reports/03-offline-architecture.md` |
-| 4 | `open_external_url` hands an unvalidated URL to `cmd /C start` on Windows — latent command-injection primitive on the IPC boundary (not reachable via today's UI) | MEDIUM | `security/reports/04-native-security.md` §4, `05-rust-security.md` §11 |
-| 5 | FFmpeg download (build-time and runtime auto-install) has no checksum verification; CWD-relative binary lookup is a hijack vector if the bundled binary is missing | MEDIUM | `security/reports/04-native-security.md` §4,6 |
-| 6 | CI leaks a 20-char prefix of the DigiCert signing key to build logs (bypasses secret masking); release pipeline (`build.yml`) has no post-build installer verification though sibling workflows already have the code | MEDIUM | `security/reports/09-supply-chain.md` §2,7 |
-| 7 | `Cargo.lock` doesn't reflect the `cpal`/`esaxx-rs` git-fork patches declared in `Cargo.toml` — unclear what's actually built | MEDIUM | `security/reports/01-inventory.md` §1, `05-rust-security.md` |
-| 8 | Committed `frontend/vs_buildtools.exe` (4.46MB, confirmed unused/unreferenced); updater endpoint and `Cargo.toml` repository field still point at upstream `Zackriya-Solutions/meeting-minutes` instead of this fork | MEDIUM | `security/reports/01-inventory.md` |
-| 9 | `fs:read-all`/`fs:write-all` Tauri capability is over-provisioned — no webview JS actually uses the `fs` plugin; would become a bypass gadget if XSS is ever introduced | LOW-MEDIUM | `security/reports/06-frontend-security.md` §8 |
-| 10 | No SBOM, no dependency/secret/SAST scanning (cargo-audit/cargo-deny/clippy/gitleaks/semgrep) anywhere in CI | LOW-MEDIUM | `security/reports/09-supply-chain.md` §8,9 |
-| 11 | No cryptographic hash verification on any downloaded model file (Whisper/Parakeet/on-device LLM) — only size heuristics + a 4-byte magic number | LOW-MEDIUM | `security/reports/07-ai-security.md` §1,2,4 |
-| 12 | Prompt-injection "ignore embedded instructions" defense exists only in the final-report system prompt, not the per-chunk/combine prompts used for long transcripts | LOW | `security/reports/07-ai-security.md` §7 |
-| 13 | No license disclosure for the on-device LLM model sources (Qwen/unsloth, Gemma/bartowski) — Gemma carries usage-restriction terms not surfaced to the user | LOW (compliance, not security) | `security/reports/07-ai-security.md` §6 |
-| 14 | Dead code (`lib_old_complex.rs`, `recording_saver_old.rs`, `core-old.rs`, `audio_v2/`) contains the bulk of raw unsafe/static-mut patterns in the tree but doesn't compile — safe to delete, shrinks the audit surface for future reviewers | LOW (housekeeping) | `security/reports/05-rust-security.md` §1, `08-data-protection.md` §5 |
-| 15 | `static mut SAMPLE_COUNTER` in `audio/pipeline.rs` — unsynchronized global mutable state, technically UB, low practical impact | LOW | `security/reports/05-rust-security.md` §1,9 |
-| 16 | Fragile `format!`-built SQL column names in `setting.rs` — safe today only because the interpolated value always comes from a hardcoded `match` arm; a future regression could reintroduce SQL injection | LOW | `security/reports/05-rust-security.md` §12 |
-| 17 | Export in `AISummary/index.tsx` uses a browser-style Blob download instead of the already-available `tauri-plugin-dialog` save dialog | LOW | `security/reports/08-data-protection.md` §13 |
-| 18 | No app-created directory has restrictive permissions set — relies entirely on OS defaults | LOW | `security/reports/08-data-protection.md` §10 |
-| 19 | Dead `dangerouslySetInnerHTML` sink in unreachable demo code (`app/notes/[id]/page.tsx`) — not a live vulnerability but a risky pattern shipped in the bundle | LOW | `security/reports/06-frontend-security.md` §1 |
+## Partial fixes — what each one still leaves open
 
-## Not verified at all (Phase 10 deferred by repo owner)
+| Area | What's still open |
+|---|---|
+| API key encryption | macOS/Linux still store keys in plaintext SQLite (Windows-only DPAPI). Upgrade path: the `keyring` crate (Credential Manager/Keychain/libsecret) once a build environment exists to verify it resolves and compiles on every target. |
+| IPC trust boundary | `api_get_api_key`/`api_get_transcript_api_key` still return plaintext keys to any webview JS that calls them — documented as an accepted trust model, not eliminated. A webview compromise (XSS, malicious imported content, compromised dependency) still reaches every stored key. |
+| Strict Offline Mode | Gates `generate_summary` (actual summarization traffic) and the update checker only. Does **not** gate ~9 other independent `reqwest::Client` instantiations — opening a cloud provider's tab in Model Settings still fires a model-list request even with strict mode on. A full centralized outbound gate across every HTTP client remains unbuilt. |
+| Model hash pinning | Parakeet v3 (`meetily.towardsgeneralintelligence.com`, non-HuggingFace) stays size-only — 2 of its 4 artifacts return S3-style multipart-upload ETags that aren't usable as content hashes, and hashing the other 2 (~670MB) wasn't done blind in this session. Ownership/TLS trust of that host also remains unconfirmed. |
+| `Cargo.lock` drift | The `cpal`/`esaxx-rs` patch-vs-lockfile mismatch is documented with a comment, not fixed — hand-editing a machine-generated lockfile without a compiler to verify against was judged unsafe. Run `cargo update -p cpal -p esaxx-rs` (or confirm the patches are dead and remove them) once a toolchain is available. |
+| CI/scanning | The new `security-scan.yml` workflow has never actually run (no CI trigger exists to exercise it, and this environment can't run GitHub Actions). All its checks are `continue-on-error: true` since there's no known-clean baseline yet — tighten once a human reviews a first report. |
+| Meeting deletion | `meeting_notes` rows may still orphan on delete since `PRAGMA foreign_keys` is never enabled for the SQLite connection. SQLite's WAL/journal may retain deleted bytes until a `VACUUM` — outside what application code can fully guarantee, and consistent with the audit's own instruction not to claim erasure guarantees. |
+| Updater endpoint | Still points at upstream `Zackriya-Solutions/meeting-minutes`'s GitHub releases, not a fork-owned feed. Repointing it needs a real minisign keypair and a hosted release — infrastructure the repo owner controls, not a code change. |
 
-- No runtime network capture has been performed — the "no hidden exfiltration" conclusion across Phase 1-9 is a static-analysis result only, not proven by observed traffic.
-- Whether the legacy Python backend (binds `0.0.0.0:5167` in some launch paths) is ever auto-started by the shipped Tauri app — static analysis says no (`externalBin` doesn't reference it), but this hasn't been confirmed by actually running the app.
-- Whether the two remediated fixes actually compile, pass their tests, or preserve existing functionality (settings UI, meeting deletion) — see `REMEDIATION_LOG.md`.
+## Never fully closed, lower priority
+
+- Windows installer manifest and Linux deb/appimage packaging are bundler-generated at build time with no committed templates to review from source — would need an actual build-output inspection.
+- `nice`, `ollama`, `sysctl`, `nvidia-smi`, `osascript`, `open`/`explorer`/`xdg-open` bare-name PATH-relative launches remain (standard desktop-app pattern, low individual severity) — a project-level decision on pinning to absolute system paths wasn't made.
+- The legacy Python backend (`backend/`) still binds `0.0.0.0` in some launch paths and has `allow_origins=["*"]` CORS — not touched, since it's marked "archived and unsupported" in the repo's own `CLAUDE.md` and confirmed not bundled with the shipped Tauri app (though that "not bundled" claim itself is still only static-analysis-confirmed, not runtime-verified).
+
+## Not verified at all — Phase 10 deferred
+
+- No runtime network capture has ever been performed. The "no hidden exfiltration" conclusion across every phase report is a static-analysis result, not proven by observed traffic.
+- Whether the legacy Python backend is ever auto-started by the shipped Tauri app — static analysis says no, never confirmed by actually running the app.
+- Whether any of the remediations in this pass actually work end-to-end at runtime (settings UI round-trips correctly, meeting deletion actually removes files, DPAPI encryption actually round-trips, the strict-offline gate actually blocks a real request) — none of this has been exercised, only read.
 
 ## SBOM
 
-Not generated. `syft`/`cargo-cyclonedx` are not installed in this environment and were not fetched (network-tool-install was out of scope for a static-only audit pass). `security/SBOM.json` remains outstanding — generate it once a build environment with one of these tools is available.
+`security/SBOM.json` still doesn't exist as a committed file. The new CI workflow can generate one (via `syft`) and upload it as a workflow artifact, but that job has never run — download its output from a workflow run and commit it once the workflow has been triggered at least once.
