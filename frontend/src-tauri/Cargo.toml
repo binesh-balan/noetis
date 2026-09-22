@@ -4,7 +4,7 @@ version = "0.4.1"
 description = "A Tauri App for meeting minutes"
 authors = ["Sujith S"]
 license = "MIT"
-repository = "https://github.com/Zackriya-Solutions/meeting-minutes"
+repository = "https://github.com/binesh-balan/noetis"
 edition = "2021"
 rust-version = "1.77"
 
@@ -209,6 +209,13 @@ strsim = "0.10.0"
 futures = "0.3.31"
 tracing-subscriber = "0.3.16"
 
+# SECURITY NOTE (security/reports/01-inventory.md #1, 05-rust-security.md): as of this
+# commit, Cargo.lock does NOT reflect these two patches — cpal and esaxx-rs both resolve
+# to plain crates.io sources in the lockfile, not these git forks. This could mean either
+# the lockfile is stale (run `cargo update -p cpal -p esaxx-rs` to fix) or these patches
+# are dead and can be removed. Needs a `cargo build`/`cargo tree` pass to confirm which,
+# which wasn't possible in the environment this note was added from (no Rust toolchain
+# installed). Do not assume either direction without verifying.
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }
 esaxx-rs = { git = "https://github.com/thewh1teagle/esaxx-rs.git", branch = "feat/dynamic-msvc-link" }

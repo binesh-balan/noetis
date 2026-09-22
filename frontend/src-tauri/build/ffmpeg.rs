@@ -3,6 +3,97 @@
 // ============================================================================
 // Download and bundle FFmpeg binaries at build-time to eliminate runtime download delays
 
+use sha2::{Digest, Sha256};
+
+/// Expected (size, sha256) for each FFmpeg release archive we download, keyed by the
+/// archive's filename. Values are GitHub's own server-computed digest for each asset of
+/// https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/tag/0.0.1 (fetched via
+/// `gh release view 0.0.1 --repo Zackriya-Solutions/ffmpeg-binaries --json assets`), not
+/// self-computed — this closes the checksum gap noted in
+/// security/reports/04-native-security.md §6 / §5, matching the same verification the
+/// ONNX Runtime downloader in build/onnxruntime.rs already does. If this release is ever
+/// re-tagged with different artifacts, this table must be updated to match.
+const FFMPEG_ARCHIVE_CHECKSUMS: &[(&str, u64, &str)] = &[
+    (
+        "ffmpeg-8.0.1-essentials_build.zip",
+        106_259_850,
+        "e2aaeaa0fdbc397d4794828086424d4aaa2102cef1fb6874f6ffd29c0b88b673",
+    ),
+    (
+        "ffmpeg-8.0.1.zip",
+        25_809_598,
+        "470e482f6e290eac92984ac12b2d67bad425b1e5269fd75fb6a3536c16e824e4",
+    ),
+    (
+        "ffmpeg-release-amd64-static.tar.xz",
+        41_888_096,
+        "abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67",
+    ),
+    (
+        "ffmpeg-release-arm64-static.tar.xz",
+        19_337_412,
+        "f4149bb2b0784e30e99bdda85471c9b5930d3402014e934a5098b41d0f7201b1",
+    ),
+    (
+        "ffmpeg80arm.zip",
+        22_400_365,
+        "0d4efcaf6a098430a708e0af694a84792938921fa126162787ae98c6151d7a95",
+    ),
+];
+
+/// Verifies `archive_path` matches the pinned (size, sha256) for `archive_filename` in
+/// [`FFMPEG_ARCHIVE_CHECKSUMS`]. Returns an error (never silently continues) if the
+/// filename isn't in the table or the file doesn't match — a network attacker or a
+/// tampered release asset should never reach extraction/execution.
+fn verify_ffmpeg_archive(archive_path: &std::path::Path, archive_filename: &str) -> Result<(), String> {
+    let (expected_size, expected_sha256) = FFMPEG_ARCHIVE_CHECKSUMS
+        .iter()
+        .find(|(name, _, _)| *name == archive_filename)
+        .map(|(_, size, sha256)| (*size, *sha256))
+        .ok_or_else(|| {
+            format!(
+                "no pinned checksum for FFmpeg archive '{}' — refusing to use an unverified download",
+                archive_filename
+            )
+        })?;
+
+    let metadata = std::fs::metadata(archive_path)
+        .map_err(|e| format!("failed to inspect downloaded FFmpeg archive: {}", e))?;
+    if metadata.len() != expected_size {
+        return Err(format!(
+            "FFmpeg archive '{}' has size {}, expected {} — refusing to extract",
+            archive_filename,
+            metadata.len(),
+            expected_size
+        ));
+    }
+
+    use std::io::Read;
+    let mut file = std::fs::File::open(archive_path)
+        .map_err(|e| format!("failed to open downloaded FFmpeg archive: {}", e))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("failed to hash FFmpeg archive: {}", e))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    let actual_sha256 = format!("{:x}", hasher.finalize());
+    if actual_sha256 != expected_sha256 {
+        return Err(format!(
+            "FFmpeg archive '{}' has SHA-256 {}, expected {} — refusing to extract a tampered or corrupted download",
+            archive_filename, actual_sha256, expected_sha256
+        ));
+    }
+
+    Ok(())
+}
+
 /// Download and bundle FFmpeg binary for current target platform
 /// Checks cache first, downloads only if missing or corrupted
 pub fn ensure_ffmpeg_binary() {
@@ -108,6 +199,16 @@ fn download_and_extract_ffmpeg(
     }
 
     println!("cargo:warning=📦 Downloaded to: {:?}", archive_path);
+
+    // Verify the download against a pinned (size, SHA-256) before extracting anything
+    // from it — see FFMPEG_ARCHIVE_CHECKSUMS above.
+    println!("cargo:warning=🔒 Verifying FFmpeg archive checksum...");
+    if let Err(e) = verify_ffmpeg_archive(&archive_path, archive_filename) {
+        let _ = std::fs::remove_file(&archive_path);
+        return Err(e);
+    }
+    println!("cargo:warning=✅ FFmpeg archive checksum verified");
+
     println!("cargo:warning=📂 Extracting FFmpeg binary...");
 
     // Extract binary (platform-specific)

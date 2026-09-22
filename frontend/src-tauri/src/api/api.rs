@@ -1189,12 +1189,31 @@ pub async fn debug_backend_connection<R: Runtime>(app: AppHandle<R>) -> Result<S
     }
 }
 
+// SECURITY: this command is reachable from any JS running in the webview via
+// invoke('open_external_url', {url}), with `url` fully attacker-controlled from the IPC
+// caller's perspective. Every current call site passes a hardcoded literal, but nothing
+// enforces that. See security/reports/04-native-security.md §4 and
+// security/reports/05-rust-security.md §11.
 #[tauri::command]
 pub async fn open_external_url(url: String) -> Result<(), String> {
     use std::process::Command;
 
+    // Only allow http(s) destinations — rejects file://, javascript:-like schemes, and
+    // anything else that isn't "open a web page".
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("open_external_url only supports http:// and https:// URLs".to_string());
+    }
+
     let result = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(&["/C", "start", &url]).output()
+        // rundll32's url.dll,FileProtocolHandler opens a URL via ShellExecute without
+        // going through cmd.exe's own command-line parser. The previous
+        // `cmd /C start <url>` construction handed `url` to cmd.exe's tokenizer, which
+        // re-interprets `&`, `|`, `^`, `%` regardless of how the argv was originally
+        // split — a classic Windows command-injection vector if this string is ever
+        // attacker-influenced.
+        Command::new("rundll32")
+            .args(&["url.dll,FileProtocolHandler", &url])
+            .output()
     } else if cfg!(target_os = "macos") {
         Command::new("open").arg(&url).output()
     } else {
