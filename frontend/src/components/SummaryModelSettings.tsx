@@ -22,6 +22,11 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
   });
 
   const { isAutoSummary, toggleIsAutoSummary } = useConfig();
+  const [managed, setManaged] = useState<{ summaryManaged: boolean; endpoint?: string; model?: string; error?: string | null } | null>(null);
+
+  useEffect(() => {
+    invoke('api_get_managed_policy').then((p) => setManaged(p as any)).catch(console.error);
+  }, []);
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -142,12 +147,23 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
           Configure the AI model used for generating meeting summaries.
         </p>
 
-        <ModelSettingsModal
-          modelConfig={modelConfig}
-          setModelConfig={setModelConfig}
-          onSave={handleSaveModelConfig}
-          skipInitialFetch={true}
-        />
+        {managed?.summaryManaged ? (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            <p className="font-medium">Managed by your organization</p>
+            {managed.error ? (
+              <p className="mt-1 text-red-700">{managed.error}. Summaries are disabled until IT fixes the policy file.</p>
+            ) : (
+              <p className="mt-1 break-all">Model: {managed.model}<br />Endpoint: {managed.endpoint}</p>
+            )}
+          </div>
+        ) : (
+          <ModelSettingsModal
+            modelConfig={modelConfig}
+            setModelConfig={setModelConfig}
+            onSave={handleSaveModelConfig}
+            skipInitialFetch={true}
+          />
+        )}
       </div>
     </div>
   );

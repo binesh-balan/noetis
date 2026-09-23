@@ -222,6 +222,13 @@ pub enum LLMProvider {
     CustomOpenAI,
 }
 
+pub(crate) fn is_azure_endpoint(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.ends_with(".azure.com")))
+        .unwrap_or(false)
+}
+
 impl LLMProvider {
     /// Parse provider from string (case-insensitive)
     pub fn from_str(s: &str) -> Result<Self, String> {
@@ -378,8 +385,16 @@ pub(crate) async fn generate_summary(
         }
     };
 
-    // Add authorization header for non-Claude providers
-    if provider != &LLMProvider::Claude {
+    // Azure (AI Foundry / Azure OpenAI) takes keys in `api-key`; a Bearer header there
+    // is treated as an Entra ID token and rejected.
+    if provider == &LLMProvider::CustomOpenAI && is_azure_endpoint(&api_url) {
+        if !api_key.is_empty() {
+            headers.insert(
+                "api-key",
+                api_key.parse().map_err(|_| "Invalid API key format".to_string())?,
+            );
+        }
+    } else if provider != &LLMProvider::Claude {
         headers.insert(
             header::AUTHORIZATION,
             format!("Bearer {}", api_key)
@@ -545,6 +560,14 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::{cell::Cell, task::Poll};
+
+    #[test]
+    fn azure_endpoint_detection() {
+        assert!(is_azure_endpoint("https://r.services.ai.azure.com/openai/v1/chat/completions"));
+        assert!(is_azure_endpoint("https://r.openai.azure.com/openai/v1"));
+        assert!(!is_azure_endpoint("https://azure.com.evil.example/v1"));
+        assert!(!is_azure_endpoint("http://localhost:8000/v1"));
+    }
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,

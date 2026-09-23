@@ -41,6 +41,7 @@ pub mod audio;
 pub mod config;
 pub mod console_utils;
 pub mod database;
+pub mod diarization;
 pub mod network_policy;
 pub mod notifications;
 pub mod ollama;
@@ -50,6 +51,7 @@ pub mod anthropic;
 pub mod groq;
 pub mod openrouter;
 pub mod parakeet_engine;
+pub mod policy;
 pub mod secure_storage;
 pub mod state;
 pub mod summary;
@@ -751,6 +753,7 @@ pub fn run() {
             api::debug_backend_connection,
             api::open_external_url,
             api::export_text_content,
+            api::export_binary_content,
             api::api_get_strict_offline_mode,
             api::api_set_strict_offline_mode,
             api::api_forget_all_api_keys,
@@ -758,6 +761,7 @@ pub fn run() {
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
+            policy::api_get_managed_policy,
             // Summary commands
             summary::commands::api_process_transcript,
             summary::commands::api_get_summary,
@@ -772,6 +776,9 @@ pub fn run() {
             summary::template_commands::api_list_templates,
             summary::template_commands::api_get_template_details,
             summary::template_commands::api_validate_template,
+            summary::template_commands::api_get_template,
+            summary::template_commands::api_save_custom_template,
+            summary::template_commands::api_delete_custom_template,
             // Built-in AI commands
             summary::summary_engine::commands::builtin_ai_list_models,
             summary::summary_engine::commands::builtin_ai_get_model_info,
@@ -841,6 +848,8 @@ pub fn run() {
             utils::open_system_settings,
             // Retranscription commands
             audio::retranscription::start_retranscription_command,
+            diarization::start_speaker_identification,
+            diarization::api_rename_speaker,
             audio::retranscription::cancel_retranscription_command,
             audio::retranscription::is_retranscription_in_progress_command,
             // Import audio commands

@@ -21,6 +21,7 @@ import {
   SummaryLanguageStorage,
 } from '@/lib/summary-language-preferences';
 import { hasVisibleSummaryContent } from '@/lib/summary-content';
+import type { ExportFormat } from '@/lib/export-document';
 
 interface SummaryPanelProps {
   meeting: {
@@ -34,6 +35,7 @@ interface SummaryPanelProps {
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
+  onExport: (format: ExportFormat, includeTranscript: boolean) => Promise<void>;
   aiSummary: MeetingSummary | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   transcripts: Transcript[];
@@ -64,6 +66,7 @@ export function SummaryPanel({
   isSaving,
   onSaveAll,
   onCopySummary,
+  onExport,
   aiSummary,
   summaryStatus,
   transcripts,
@@ -273,6 +276,7 @@ export function SummaryPanel({
                 isDirty={isSummaryDirty}
                 onSave={onSaveAll}
                 onCopy={onCopySummary}
+                onExport={onExport}
               />
             </div>
           )}

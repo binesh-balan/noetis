@@ -396,7 +396,13 @@ impl SummaryService {
         // Get CustomOpenAI config if provider is CustomOpenAI
         let (custom_openai_endpoint, custom_openai_api_key, custom_openai_max_tokens, custom_openai_temperature, custom_openai_top_p) =
             if provider == LLMProvider::CustomOpenAI {
-                match SettingsRepository::get_custom_openai_config(&pool).await {
+                let config = match crate::policy::managed_summary() {
+                    Ok(None) => SettingsRepository::get_custom_openai_config(&pool)
+                        .await
+                        .map_err(|e| e.to_string()),
+                    managed => managed,
+                };
+                match config {
                     Ok(Some(config)) => {
                         info!("✓ Using custom OpenAI endpoint: {}", config.endpoint);
                         (

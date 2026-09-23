@@ -43,6 +43,7 @@ export function TranscriptPanel({
       id: t.id,
       timestamp: t.audio_start_time ?? 0,
       endTime: t.audio_end_time,
+      speaker: t.speaker,
       text: t.text,
       confidence: t.confidence,
     })),

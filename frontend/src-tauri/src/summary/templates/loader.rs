@@ -19,101 +19,63 @@ pub fn set_bundled_templates_dir(path: PathBuf) {
 /// Get the user's custom templates directory path
 ///
 /// Returns the platform-specific application data directory for custom templates:
-/// - macOS: ~/Library/Application Support/Meetily/templates/
-/// - Windows: %APPDATA%\Meetily\templates\
-/// - Linux: ~/.config/Meetily/templates/
+/// - macOS: ~/Library/Application Support/Noetis/templates/
+/// - Windows: %APPDATA%\Noetis\templates\
+/// - Linux: ~/.config/Noetis/templates/
 fn get_custom_templates_dir() -> Option<PathBuf> {
     let mut path = dirs::data_dir()?;
-    path.push("Meetily");
+    path.push("Noetis");
     path.push("templates");
     Some(path)
 }
 
-/// Load a template from the bundled resources directory
-///
-/// # Arguments
-/// * `template_id` - Template identifier (without .json extension)
-///
-/// # Returns
-/// The template JSON content if found, None otherwise
-fn load_bundled_template(template_id: &str) -> Option<String> {
-    let bundled_dir = BUNDLED_TEMPLATES_DIR.read().ok()?.clone()?;
-    let template_path = bundled_dir.join(format!("{}.json", template_id));
-
-    debug!("Checking for bundled template at: {:?}", template_path);
-
-    match std::fs::read_to_string(&template_path) {
-        Ok(content) => {
-            info!("Loaded bundled template '{}' from {:?}", template_id, template_path);
-            Some(content)
-        }
-        Err(e) => {
-            debug!("No bundled template '{}' found: {}", template_id, e);
-            None
-        }
-    }
+/// Template directories in priority order: org library (managed policy), user custom,
+/// bundled app resources. Built-in embedded templates are the final fallback.
+fn template_dirs() -> Vec<PathBuf> {
+    let bundled = BUNDLED_TEMPLATES_DIR.read().ok().and_then(|d| d.clone());
+    [crate::policy::templates_dir(), get_custom_templates_dir(), bundled]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
-/// Load a template from the user's custom templates directory
-///
-/// # Arguments
-/// * `template_id` - Template identifier (without .json extension)
-///
-/// # Returns
-/// The template JSON content if found, None otherwise
-fn load_custom_template(template_id: &str) -> Option<String> {
-    let custom_dir = get_custom_templates_dir()?;
-    let template_path = custom_dir.join(format!("{}.json", template_id));
-
-    debug!("Checking for custom template at: {:?}", template_path);
-
-    match std::fs::read_to_string(&template_path) {
-        Ok(content) => {
-            info!("Loaded custom template '{}' from {:?}", template_id, template_path);
-            Some(content)
-        }
-        Err(e) => {
-            debug!("No custom template '{}' found: {}", template_id, e);
-            None
-        }
-    }
+/// Ids become file names, so only allow plain names (no `..`, slashes, drive letters).
+fn is_safe_id(template_id: &str) -> bool {
+    !template_id.is_empty()
+        && template_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
-/// Load and parse a template by identifier
-///
-/// This function implements a fallback strategy:
-/// 1. Check user's custom templates directory
-/// 2. Check bundled resources directory (app templates)
-/// 3. Fall back to built-in embedded templates
-/// 4. Return error if not found in any location
-///
-/// # Arguments
-/// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
-///
-/// # Returns
-/// Parsed and validated Template struct
+/// Load and parse a template by identifier: org library, then user custom, then
+/// bundled, then built-in.
 pub fn get_template(template_id: &str) -> Result<Template, String> {
     info!("Loading template: {}", template_id);
+    if !is_safe_id(template_id) {
+        return Err(format!("Invalid template id '{}'", template_id));
+    }
 
-    // Try custom template first, then bundled, then built-in
-    let json_content = if let Some(custom_content) = load_custom_template(template_id) {
-        debug!("Using custom template for '{}'", template_id);
-        custom_content
-    } else if let Some(bundled_content) = load_bundled_template(template_id) {
-        debug!("Using bundled template for '{}'", template_id);
-        bundled_content
-    } else if let Some(builtin_content) = defaults::get_builtin_template(template_id) {
-        debug!("Using built-in template for '{}'", template_id);
-        builtin_content.to_string()
-    } else {
-        return Err(format!(
-            "Template '{}' not found. Available templates: {}",
-            template_id,
-            list_template_ids().join(", ")
-        ));
+    let from_disk = template_dirs().into_iter().find_map(|dir| {
+        let path = dir.join(format!("{}.json", template_id));
+        let content = std::fs::read_to_string(&path).ok()?;
+        debug!("Using template '{}' from {:?}", template_id, path);
+        Some(content)
+    });
+
+    let json_content = match from_disk {
+        Some(content) => content,
+        None => match defaults::get_builtin_template(template_id) {
+            Some(builtin) => builtin.to_string(),
+            None => {
+                return Err(format!(
+                    "Template '{}' not found. Available templates: {}",
+                    template_id,
+                    list_template_ids().join(", ")
+                ))
+            }
+        },
     };
 
-    // Parse and validate
     validate_and_parse_template(&json_content)
 }
 
@@ -133,61 +95,66 @@ pub fn validate_and_parse_template(json_content: &str) -> Result<Template, Strin
     Ok(template)
 }
 
-/// List all available template identifiers
-///
-/// Returns a combined list of:
-/// - Built-in template IDs
-/// - Bundled template IDs (from app resources)
-/// - Custom template IDs (from user's data directory)
+/// Where a template id resolves from: "org", "custom", or "builtin" (bundled + embedded).
+/// Only "custom" templates are editable by the user.
+pub fn template_source(template_id: &str) -> &'static str {
+    let exists_in = |dir: Option<PathBuf>| {
+        dir.map_or(false, |d| d.join(format!("{}.json", template_id)).is_file())
+    };
+    if exists_in(crate::policy::templates_dir()) {
+        "org"
+    } else if exists_in(get_custom_templates_dir()) {
+        "custom"
+    } else {
+        "builtin"
+    }
+}
+
+/// Save (create or overwrite) a user template. A custom template with a built-in id
+/// shadows the built-in one; org templates always win and can't be shadowed.
+pub fn save_custom_template(template_id: &str, template: &Template) -> Result<(), String> {
+    if !is_safe_id(template_id) {
+        return Err(format!("Invalid template id '{}'", template_id));
+    }
+    if template_source(template_id) == "org" {
+        return Err("This template is managed by your organization".into());
+    }
+    template.validate()?;
+    let dir = get_custom_templates_dir().ok_or("No user data directory")?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {:?}: {}", dir, e))?;
+    let json = serde_json::to_string_pretty(template).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("{}.json", template_id)), json)
+        .map_err(|e| format!("Failed to save template: {}", e))
+}
+
+pub fn delete_custom_template(template_id: &str) -> Result<(), String> {
+    if !is_safe_id(template_id) || template_source(template_id) != "custom" {
+        return Err(format!("'{}' is not a user template", template_id));
+    }
+    let dir = get_custom_templates_dir().ok_or("No user data directory")?;
+    std::fs::remove_file(dir.join(format!("{}.json", template_id)))
+        .map_err(|e| format!("Failed to delete template: {}", e))
+}
+
+/// List all available template identifiers (built-in plus every template directory).
 pub fn list_template_ids() -> Vec<String> {
     let mut ids: Vec<String> = defaults::list_builtin_template_ids()
         .into_iter()
         .map(|s| s.to_string())
         .collect();
 
-    // Add bundled templates if directory is set
-    if let Ok(bundled_dir_lock) = BUNDLED_TEMPLATES_DIR.read() {
-        if let Some(bundled_dir) = bundled_dir_lock.as_ref() {
-            if bundled_dir.exists() {
-                match std::fs::read_dir(bundled_dir) {
-                    Ok(entries) => {
-                        for entry in entries.flatten() {
-                            if let Some(filename) = entry.file_name().to_str() {
-                                if filename.ends_with(".json") {
-                                    let id = filename.trim_end_matches(".json").to_string();
-                                    if !ids.contains(&id) {
-                                        ids.push(id);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to read bundled templates directory: {}", e);
-                    }
-                }
+    for dir in template_dirs() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                debug!("Skipping templates directory {:?}: {}", dir, e);
+                continue;
             }
-        }
-    }
-
-    // Add custom templates if directory exists
-    if let Some(custom_dir) = get_custom_templates_dir() {
-        if custom_dir.exists() {
-            match std::fs::read_dir(&custom_dir) {
-                Ok(entries) => {
-                    for entry in entries.flatten() {
-                        if let Some(filename) = entry.file_name().to_str() {
-                            if filename.ends_with(".json") {
-                                let id = filename.trim_end_matches(".json").to_string();
-                                if !ids.contains(&id) {
-                                    ids.push(id);
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to read custom templates directory: {}", e);
+        };
+        for entry in entries.flatten() {
+            if let Some(id) = entry.file_name().to_str().and_then(|f| f.strip_suffix(".json")) {
+                if is_safe_id(id) && !ids.iter().any(|i| i == id) {
+                    ids.push(id.to_string());
                 }
             }
         }
@@ -242,6 +209,14 @@ mod tests {
         let ids = list_template_ids();
         assert!(ids.contains(&"daily_standup".to_string()));
         assert!(ids.contains(&"standard_meeting".to_string()));
+    }
+
+    #[test]
+    fn test_rejects_path_traversal_ids() {
+        assert!(get_template("../../secrets").is_err());
+        assert!(get_template(r"C:\x").is_err());
+        assert!(!is_safe_id(""));
+        assert!(is_safe_id("daily_standup-2"));
     }
 
     #[test]

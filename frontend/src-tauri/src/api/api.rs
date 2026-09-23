@@ -137,6 +137,8 @@ pub struct MeetingTranscript {
     pub audio_end_time: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
 }
 
 /// Meeting metadata without transcripts (for pagination)
@@ -484,9 +486,11 @@ pub async fn api_get_model_config<R: Runtime>(
             match SettingsRepository::get_api_key(pool, &config.provider).await {
                 Ok(api_key) => {
                     log_info!("Successfully retrieved model config and API key.");
+                    let managed = crate::policy::managed_summary()?;
+                    let managed = managed.as_ref();
                     Ok(Some(ModelConfig {
-                        provider: config.provider,
-                        model: config.model,
+                        provider: managed.map_or(config.provider, |_| "custom-openai".into()),
+                        model: managed.map_or(config.model, |m| m.model.clone()),
                         whisper_model: config.whisper_model,
                         api_key,
                         ollama_endpoint: config.ollama_endpoint,
@@ -532,6 +536,12 @@ pub async fn api_save_model_config<R: Runtime>(
         &ollama_endpoint
     );
     let pool = state.db_manager.pool();
+
+    // Managed policy: still persist the user's whisper model, but pin the summary model.
+    let (provider, model) = match crate::policy::managed_summary()? {
+        Some(cfg) => ("custom-openai".to_string(), cfg.model),
+        None => (provider, model),
+    };
 
     if let Err(e) = SettingsRepository::save_model_config(
         pool,
@@ -964,6 +974,7 @@ pub async fn api_get_meeting_transcripts<R: Runtime>(
                     audio_start_time: t.audio_start_time,
                     audio_end_time: t.audio_end_time,
                     duration: t.duration,
+                    speaker: t.speaker,
                 })
                 .collect::<Vec<_>>();
 
@@ -1282,6 +1293,28 @@ pub async fn export_text_content<R: Runtime>(
     suggested_filename: String,
     extension: String,
 ) -> Result<bool, String> {
+    save_via_dialog(&app, content.as_bytes(), &suggested_filename, &extension)
+}
+
+/// Same as `export_text_content`, for generated binary documents (PDF, DOCX).
+#[tauri::command]
+pub async fn export_binary_content<R: Runtime>(
+    app: AppHandle<R>,
+    content: Vec<u8>,
+    suggested_filename: String,
+    extension: String,
+) -> Result<bool, String> {
+    save_via_dialog(&app, &content, &suggested_filename, &extension)
+}
+
+/// Shows a native save dialog and writes `content` to the chosen path.
+/// Returns `Ok(false)` if the user cancelled.
+fn save_via_dialog<R: Runtime>(
+    app: &AppHandle<R>,
+    content: &[u8],
+    suggested_filename: &str,
+    extension: &str,
+) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let filter_label = if extension.is_empty() {
@@ -1292,13 +1325,13 @@ pub async fn export_text_content<R: Runtime>(
     let filter_extensions: Vec<&str> = if extension.is_empty() {
         vec!["*"]
     } else {
-        vec![extension.as_str()]
+        vec![extension]
     };
 
     let file_path = app
         .dialog()
         .file()
-        .set_file_name(&suggested_filename)
+        .set_file_name(suggested_filename)
         .add_filter(&filter_label, &filter_extensions)
         .blocking_save_file();
 
@@ -1335,6 +1368,10 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
         &endpoint,
         &model
     );
+
+    if crate::policy::managed_summary()?.is_some() {
+        return Err(crate::policy::MANAGED_ERROR.to_string());
+    }
 
     // Validate required fields
     if endpoint.trim().is_empty() {
@@ -1399,6 +1436,11 @@ pub async fn api_get_custom_openai_config<R: Runtime>(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<CustomOpenAIConfig>, String> {
     log_info!("api_get_custom_openai_config called");
+
+    // The org key stays in Rust; the webview only needs endpoint/model for display.
+    if let Some(cfg) = crate::policy::managed_summary()? {
+        return Ok(Some(CustomOpenAIConfig { api_key: None, ..cfg }));
+    }
 
     let pool = state.db_manager.pool();
 
@@ -1466,7 +1508,11 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
 
     // Add authorization if API key provided
     if let Some(key) = api_key.filter(|k| !k.trim().is_empty()) {
-        request = request.header("Authorization", format!("Bearer {}", key));
+        request = if crate::summary::llm_client::is_azure_endpoint(&url) {
+            request.header("api-key", key)
+        } else {
+            request.header("Authorization", format!("Bearer {}", key))
+        };
     }
 
     match request.send().await {

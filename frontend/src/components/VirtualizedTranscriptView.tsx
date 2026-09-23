@@ -27,6 +27,8 @@ export interface VirtualizedTranscriptViewProps {
     showConfidence?: boolean;
     /** Completely disable auto-scroll behavior (for meeting details page) */
     disableAutoScroll?: boolean;
+    /** Rename a speaker across the meeting (renaming onto an existing name merges them) */
+    onRenameSpeaker?: (from: string, to: string) => void;
 
     // Pagination props (infinite scroll)
     hasMore?: boolean;
@@ -63,6 +65,53 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
+// Stable colour per speaker name so the same person reads the same everywhere.
+const SPEAKER_COLORS = ['text-blue-700', 'text-emerald-700', 'text-amber-700', 'text-fuchsia-700', 'text-cyan-700', 'text-rose-700'];
+function speakerColor(name: string) {
+    let h = 0;
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return SPEAKER_COLORS[h % SPEAKER_COLORS.length];
+}
+
+// Speaker name; click to rename (Enter saves, Escape cancels).
+function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from: string, to: string) => void }) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState(speaker);
+    const commit = () => {
+        setEditing(false);
+        const to = value.trim();
+        if (to && to !== speaker) onRename?.(speaker, to);
+        else setValue(speaker);
+    };
+    if (editing) {
+        return (
+            <input
+                autoFocus
+                aria-label="Speaker name"
+                className="text-xs font-semibold border border-gray-300 rounded px-1 py-0.5 mb-0.5 w-40"
+                value={value}
+                maxLength={64}
+                onChange={e => setValue(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => {
+                    if (e.key === 'Enter') commit();
+                    if (e.key === 'Escape') { setValue(speaker); setEditing(false); }
+                }}
+            />
+        );
+    }
+    return (
+        <button
+            type="button"
+            className={`text-xs font-semibold mb-0.5 ${speakerColor(speaker)} ${onRename ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+            title={onRename ? 'Rename speaker (use an existing name to merge)' : undefined}
+            onClick={() => onRename && setEditing(true)}
+        >
+            {speaker}
+        </button>
+    );
+}
+
 // Memoized transcript segment component
 const TranscriptSegment = memo(function TranscriptSegment({
     id,
@@ -71,6 +120,8 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence,
     isStreaming,
     showConfidence,
+    speaker,
+    onRenameSpeaker,
 }: {
     id: string;
     timestamp: number;
@@ -78,6 +129,8 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence?: number;
     isStreaming: boolean;
     showConfidence: boolean;
+    speaker?: string | null;
+    onRenameSpeaker?: (from: string, to: string) => void;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
 
@@ -97,6 +150,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
                     </TooltipContent>
                 </Tooltip>
                 <div className="flex-1">
+                    {speaker && <SpeakerLabel key={speaker} speaker={speaker} onRename={onRenameSpeaker} />}
                     {isStreaming ? (
                         <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
                             <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
@@ -119,6 +173,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     enableStreaming = false,
     showConfidence = true,
     disableAutoScroll = false,
+    onRenameSpeaker,
     hasMore = false,
     isLoadingMore = false,
     totalCount = 0,
@@ -257,7 +312,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         </>
                     ) : (
                         <>
-                            <p className="text-lg font-semibold">Welcome to meetily!</p>
+                            <p className="text-lg font-semibold">Welcome to noetis!</p>
                             <p className="text-xs mt-1">Start recording to see live transcription</p>
                         </>
                     )}
@@ -296,6 +351,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speaker={segment.speaker}
+                                        onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </div>
                             );
@@ -352,6 +409,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speaker={segment.speaker}
+                                        onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </motion.div>
                             );

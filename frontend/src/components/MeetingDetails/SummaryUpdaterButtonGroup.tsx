@@ -2,14 +2,21 @@
 
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Copy, Save, Loader2 } from 'lucide-react';
+import { Copy, Save, Loader2, Download } from 'lucide-react';
+import { useState } from 'react';
 import Analytics from '@/lib/analytics';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuCheckboxItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import type { ExportFormat } from '@/lib/export-document';
 
 interface SummaryUpdaterButtonGroupProps {
   isSaving: boolean;
   isDirty: boolean;
   onSave: () => Promise<void>;
   onCopy: () => Promise<void>;
+  onExport: (format: ExportFormat, includeTranscript: boolean) => Promise<void>;
 }
 
 export function SummaryUpdaterButtonGroup({
@@ -17,7 +24,14 @@ export function SummaryUpdaterButtonGroup({
   isDirty,
   onSave,
   onCopy,
+  onExport,
 }: SummaryUpdaterButtonGroupProps) {
+  const [includeTranscript, setIncludeTranscript] = useState(true);
+  const exportAs = (format: ExportFormat) => {
+    Analytics.trackButtonClick(`export_${format}`, 'meeting_details');
+    onExport(format, includeTranscript);
+  };
+
   return (
     <ButtonGroup>
       {/* Save button */}
@@ -59,6 +73,28 @@ export function SummaryUpdaterButtonGroup({
         <Copy />
         <span className="hidden @[40rem]:inline">Copy</span>
       </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" title="Export" className="cursor-pointer">
+            <Download />
+            <span className="hidden @[40rem]:inline">Export</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => exportAs('pdf')}>PDF</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => exportAs('docx')}>Word (.docx)</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => exportAs('md')}>Markdown</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={includeTranscript}
+            onCheckedChange={v => setIncludeTranscript(!!v)}
+            onSelect={e => e.preventDefault()}
+          >
+            Include transcript
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
     </ButtonGroup>
   );
