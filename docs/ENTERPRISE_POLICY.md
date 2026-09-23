@@ -54,7 +54,7 @@ Every key is optional.
 |---|---|
 | `summary` | All summaries use this OpenAI-compatible endpoint. Model settings and the meeting "AI Model" button are hidden; the key never reaches the UI. Azure hosts get the `api-key` header. `apiKey` may be `dpapi:v1:…` (machine-scope DPAPI, decrypted on that PC only), plaintext, or omitted when a gateway adds auth. |
 | `transcription` | `provider` = `parakeet` or `localWhisper`; `model` = e.g. `parakeet-tdt-0.6b-v3-int8` or `large-v3-turbo`; optional `language` (e.g. `en`; omit = auto-detect). Applies to live recording, re-transcribe and import. Onboarding is skipped; the Transcription settings tab and language/model pickers are hidden. |
-| `modelsDir` | Machine-wide folder of IT-supplied models, checked before the per-user one. Layout: `ggml-<name>.bin` (Whisper), `parakeet/<model>/…`, `diarization/voxceleb_resnet34.onnx` (speaker identification). |
+| `modelsDir` | Machine-wide folder of IT-supplied models, checked before the per-user one. Layout: `ggml-<name>.bin` (Whisper), `parakeet/<model>/…`, `diarization/voxceleb_resnet34.onnx` + `diarization/segmentation-3.0.onnx` (speaker identification). |
 | `allowModelDownloads` | `false` blocks every model download (transcription, built-in AI, speaker model). Default `true`. |
 | `disableAnalytics` | `true` forces usage analytics off and hides the consent switch. |
 | `templatesDir` | Org template library (template `.json` files), shown to everyone and overriding user/built-in templates with the same id. |

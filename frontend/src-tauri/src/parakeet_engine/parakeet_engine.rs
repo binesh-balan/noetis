@@ -1,4 +1,4 @@
-use crate::parakeet_engine::model::ParakeetModel;
+use crate::parakeet_engine::model::{ParakeetModel, TimestampedResult};
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -645,6 +645,18 @@ impl ParakeetEngine {
         log::debug!("Parakeet transcription result: '{}'", result.text);
 
         Ok(result.text)
+    }
+
+    /// Like [`Self::transcribe_audio`], but keeps per-token timestamps (seconds from the
+    /// start of `audio_data`). Used by speaker identification to split lines at turn changes.
+    pub async fn transcribe_audio_timestamped(&self, audio_data: Vec<f32>) -> Result<TimestampedResult> {
+        let mut model_guard = self.current_model.write().await;
+        let model = model_guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("No Parakeet model loaded. Please load a model first."))?;
+        model
+            .transcribe_samples(audio_data)
+            .map_err(|e| anyhow!("Parakeet transcription failed: {}", e))
     }
 
     /// Get the models directory path

@@ -77,8 +77,11 @@ copyright notice is retained in the license file as the MIT license requires.
   and [transcribe-rs](https://crates.io/crates/transcribe-rs), from which some code is borrowed.
 - **NVIDIA** for the **Parakeet** model, and [istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
   for its ONNX conversion.
-- [WeSpeaker](https://github.com/wenet-e2e/wespeaker) for the ResNet34 speaker-embedding model used by speaker
-  identification ([Apache-2.0](https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34)).
+- [pyannote.audio](https://github.com/pyannote/pyannote-audio) for the segmentation-3.0 speaker-turn model
+  ([MIT](https://huggingface.co/pyannote/segmentation-3.0); ONNX export by
+  [onnx-community](https://huggingface.co/onnx-community/pyannote-segmentation-3.0)) and the diarization recipe, and
+  [WeSpeaker](https://github.com/wenet-e2e/wespeaker) for the ResNet34 speaker-embedding model
+  ([Apache-2.0](https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34)).
 - The optional built-in summarization models are third-party GGUF quantizations under their own licenses —
   review before enabling one:
   - [Qwen3.5](https://huggingface.co/unsloth/Qwen3.5-2B-Instruct-GGUF) (quantized by [unsloth](https://huggingface.co/unsloth)) — Alibaba's [Qwen License](https://huggingface.co/Qwen/Qwen3.5-2B-Instruct/blob/main/LICENSE).

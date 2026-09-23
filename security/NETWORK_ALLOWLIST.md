@@ -29,7 +29,8 @@ Derived from `security/reports/02-network-audit.md` (static analysis, not yet ru
 | `https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/...` | Parakeet v2 model download |
 | `https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c0.../*` | Parakeet v3 model download — pinned commit, all 4 artifacts SHA-256 pinned |
 | `https://huggingface.co/unsloth/...`, `https://huggingface.co/bartowski/...` | On-device (Qwen/Gemma) GGUF model downloads |
-| `https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/ff1ac5bc.../voxceleb_resnet34.onnx` | Speaker-identification model, fetched on first "Speakers" click — pinned commit, size + SHA-256 pinned, blocked in Strict Offline Mode |
+| `https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/ff1ac5bc.../voxceleb_resnet34.onnx` | Speaker-embedding model for speaker identification, fetched on first use — pinned commit, size + SHA-256 pinned, blocked in Strict Offline Mode or by `allowModelDownloads: false` |
+| `https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/733a93b6.../onnx/model.onnx` | Speaker-turn segmentation model (pyannote segmentation-3.0, MIT), fetched on first use — same pinning and blocking |
 | Summary endpoint from managed `policy.json` (e.g. `https://<resource>.services.ai.azure.com/openai/v1`) | Org-enforced summary provider when IT deploys a policy — see docs/ENTERPRISE_POLICY.md |
 | `https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/...` | Build-time FFmpeg binary fetch |
 | `https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/...` | Build-time ONNX Runtime fetch |

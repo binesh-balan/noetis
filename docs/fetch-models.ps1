@@ -19,7 +19,9 @@ $files = @(
     @{ Url = "$parakeet/nemo128.onnx";                  Path = 'parakeet\parakeet-tdt-0.6b-v3-int8\nemo128.onnx';                  Size = 139764;    Sha = 'a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f' },
     @{ Url = "$parakeet/vocab.txt";                     Path = 'parakeet\parakeet-tdt-0.6b-v3-int8\vocab.txt';                     Size = 93939;     Sha = 'd58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d' },
     @{ Url = 'https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx'
-       Path = 'diarization\voxceleb_resnet34.onnx'; Size = 26534127; Sha = '9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1' }
+       Path = 'diarization\voxceleb_resnet34.onnx'; Size = 26534127; Sha = '9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1' },
+    @{ Url = 'https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/733a93b6473d019a773298e08cefa686894b1854/onnx/model.onnx'
+       Path = 'diarization\segmentation-3.0.onnx'; Size = 5986908; Sha = '057ee564753071c0b09b5b611648b50ac188d50846bff5f01e9f7bbf1591ea25' }
 )
 
 foreach ($f in $files) {
