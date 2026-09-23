@@ -1,5 +1,6 @@
 "use client"
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
+import { pendingSpeakerIdentification } from '@/lib/speakers';
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { MeetingSummary, SummaryProcessResponse, Transcript } from "@/types";
 import PageContent from "./page-content";
@@ -50,6 +51,12 @@ function MeetingDetailsContent() {
     error: transcriptError,
   } = usePaginatedTranscripts({ meetingId: meetingId || '' });
 
+  // Show speaker labels as soon as automatic identification (started after recording) finishes.
+  useEffect(() => {
+    const pending = meetingId ? pendingSpeakerIdentification(meetingId) : undefined;
+    pending?.then(() => refetch(), () => undefined);
+  }, [meetingId, refetch]);
+
   // Check if gemma3:1b model is available in Ollama
   const checkForGemmaModel = useCallback(async (): Promise<boolean> => {
     try {
@@ -88,6 +95,12 @@ function MeetingDetailsContent() {
       // If DB already has a model, use it (never override!)
       if (currentConfig && currentConfig.model) {
         console.log('Using existing model from DB:', currentConfig.model);
+        // Let automatic speaker identification finish first so the summary sees speaker names.
+        const pending = meetingId ? pendingSpeakerIdentification(meetingId) : undefined;
+        if (pending) {
+          await pending.catch(() => undefined);
+          await refetch();
+        }
         setShouldAutoGenerate(true);
         setHasCheckedAutoGen(true);
         return;
@@ -116,7 +129,7 @@ function MeetingDetailsContent() {
     }
 
     setHasCheckedAutoGen(true);
-  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary]);
+  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary, meetingId, refetch]);
 
   // Sync meeting metadata from pagination hook to meeting details state
   useEffect(() => {

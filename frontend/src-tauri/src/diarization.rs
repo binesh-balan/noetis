@@ -34,11 +34,14 @@ const MIN_SEGMENT_SECS: f64 = 0.5;
 /// Longer segments are truncated; 20s is plenty to characterise a voice.
 const MAX_SEGMENT_SECS: f64 = 20.0;
 /// Cosine similarity at or above which two clusters are merged into one speaker.
-/// ponytail: calibration knob. Measured with this pipeline: same voice 0.82-0.92, different
-/// voices (incl. two similar male voices) 0.23-0.48 — see `real_model_separates_three_voices`.
-/// 0.55 sits in that gap with margin for real-room audio, where same-speaker scores drop.
-/// Raise it if distinct people get merged; lower it if one person is split into several.
-const SAME_SPEAKER_THRESHOLD: f32 = 0.55;
+/// ponytail: calibration knob. Measured with this pipeline: synthetic voices same 0.82-0.92 vs
+/// different <= 0.48 (`real_model_separates_three_voices`); real recorded meetings score lower
+/// for the same person (~0.45-0.95, short clips worse), so 0.50 plus small-cluster absorption
+/// below. Raise it if distinct people get merged; lower it if one person is split.
+const SAME_SPEAKER_THRESHOLD: f32 = 0.50;
+/// A "speaker" with less total speech than this is folded into the most similar real speaker:
+/// short interjections ("Yeah.") give noisy embeddings that otherwise become extra speakers.
+const MIN_SPEAKER_SECS: f64 = 5.0;
 
 static IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
@@ -259,6 +262,41 @@ pub(crate) fn cluster(embeddings: &[Vec<f32>], threshold: f32) -> Vec<usize> {
         .collect()
 }
 
+/// Cluster, then fold low-speech clusters into their most similar substantial cluster.
+/// `durations` = seconds of speech behind each embedding. Ids renumbered by first appearance.
+pub(crate) fn assign_speakers(embeddings: &[Vec<f32>], durations: &[f64], threshold: f32) -> Vec<usize> {
+    let mut ids = cluster(embeddings, threshold);
+    let k = ids.iter().max().map_or(0, |m| m + 1);
+    let speech: Vec<f64> = (0..k)
+        .map(|c| ids.iter().zip(durations).filter(|(i, _)| **i == c).map(|(_, d)| d).sum())
+        .collect();
+    let big: Vec<usize> = (0..k).filter(|&c| speech[c] >= MIN_SPEAKER_SECS).collect();
+    if big.is_empty() || big.len() == k {
+        return ids;
+    }
+    let centroid = |c: usize, ids: &[usize]| -> Vec<f32> {
+        let mut sum = vec![0f32; embeddings[0].len()];
+        for (e, _) in embeddings.iter().zip(ids).filter(|(_, i)| **i == c) {
+            sum.iter_mut().zip(e).for_each(|(s, x)| *s += x);
+        }
+        sum
+    };
+    let big_centroids: Vec<(usize, Vec<f32>)> = big.iter().map(|&b| (b, centroid(b, &ids))).collect();
+    for small in (0..k).filter(|c| !big.contains(c)) {
+        let c = centroid(small, &ids);
+        let target = big_centroids
+            .iter()
+            .max_by(|a, b| cosine(&c, &a.1).total_cmp(&cosine(&c, &b.1)))
+            .map(|(b, _)| *b)
+            .unwrap();
+        ids.iter_mut().filter(|i| **i == small).for_each(|i| *i = target);
+    }
+    let mut order: Vec<usize> = Vec::new();
+    ids.iter()
+        .map(|o| order.iter().position(|x| x == o).unwrap_or_else(|| { order.push(*o); order.len() - 1 }))
+        .collect()
+}
+
 /// Fill labels for segments that had no embedding (too short) from the nearest labelled
 /// segment in time order; if nothing was labelled, everyone is speaker 0.
 fn fill_gaps(labels: &mut [Option<usize>]) {
@@ -372,6 +410,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
         let mut embedder = Embedder::load(&model_path).context("loading speaker model")?;
         let mut embeddings = Vec::new();
         let mut owners = Vec::new(); // row index of each embedding
+        let mut durations = Vec::new();
         for (i, span) in spans.iter().enumerate() {
             let Some((start, end)) = *span else { continue };
             if end - start < MIN_SEGMENT_SECS {
@@ -386,6 +425,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
                 Ok(e) => {
                     embeddings.push(e);
                     owners.push(i);
+                    durations.push((to - from) as f64 / SAMPLE_RATE);
                 }
                 Err(e) => warn!("Skipping segment {}: {}", i, e),
             }
@@ -393,7 +433,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
             emit_progress(&app_for_task, &meeting, "analyzing", pct, "Analyzing voices...");
         }
         let mut labels = vec![None; spans.len()];
-        for (row, id) in owners.iter().zip(cluster(&embeddings, SAME_SPEAKER_THRESHOLD)) {
+        for (row, id) in owners.iter().zip(assign_speakers(&embeddings, &durations, SAME_SPEAKER_THRESHOLD)) {
             labels[*row] = Some(id);
         }
         fill_gaps(&mut labels);
@@ -510,6 +550,42 @@ mod tests {
         assert_eq!(cluster(&embs, SAME_SPEAKER_THRESHOLD), vec![0, 1, 2, 0, 1, 2, 0, 1, 2]);
     }
 
+    /// Runs the real pipeline on a recorded meeting folder (audio.mp4 + transcripts.json) and
+    /// prints each segment's label. Needs DIARIZATION_TEST_DIR (model) and DIARIZATION_MEETING_DIR.
+    #[test]
+    #[ignore]
+    fn real_meeting_folder() {
+        let model = PathBuf::from(std::env::var("DIARIZATION_TEST_DIR").unwrap()).join(MODEL_FILE);
+        let folder = PathBuf::from(std::env::var("DIARIZATION_MEETING_DIR").unwrap());
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(folder.join("transcripts.json")).unwrap()).unwrap();
+        let segs: Vec<(f64, f64, String)> = json["segments"].as_array().unwrap().iter()
+            .map(|s| (s["audio_start_time"].as_f64().unwrap(), s["audio_end_time"].as_f64().unwrap(), s["text"].as_str().unwrap().to_string()))
+            .collect();
+        let samples = crate::audio::decoder::decode_audio_file(&folder.join("audio.mp4")).unwrap().to_whisper_format();
+        let mut embedder = Embedder::load(&model).unwrap();
+        let (mut embs, mut owners, mut durs) = (Vec::new(), Vec::new(), Vec::new());
+        for (i, (s, e, _)) in segs.iter().enumerate() {
+            if e - s < MIN_SEGMENT_SECS { continue; }
+            let from = ((s * SAMPLE_RATE) as usize).min(samples.len());
+            let to = (((s + (e - s).min(MAX_SEGMENT_SECS)) * SAMPLE_RATE) as usize).min(samples.len());
+            if to - from < (MIN_SEGMENT_SECS * SAMPLE_RATE) as usize { continue; }
+            embs.push(embedder.embed(&samples[from..to]).unwrap());
+            owners.push(i);
+            durs.push((to - from) as f64 / SAMPLE_RATE);
+        }
+        for (i, a) in embs.iter().enumerate() {
+            let row: Vec<String> = embs.iter().map(|b| format!("{:5.2}", cosine(a, b))).collect();
+            println!("seg{:<2} {}", owners[i], row.join(" "));
+        }
+        let mut labels = vec![None; segs.len()];
+        for (row, id) in owners.iter().zip(assign_speakers(&embs, &durs, SAME_SPEAKER_THRESHOLD)) { labels[*row] = Some(id); }
+        fill_gaps(&mut labels);
+        for ((s, e, t), l) in segs.iter().zip(&labels) {
+            println!("[{s:6.1}-{e:6.1}] Speaker {}: {}", l.unwrap() + 1, t.chars().take(70).collect::<String>());
+        }
+    }
+
     #[test]
     fn clusters_by_speaker_and_numbers_by_first_appearance() {
         let a = vec![1.0, 0.0, 0.0];
@@ -518,8 +594,12 @@ mod tests {
         let b2 = vec![0.1, 0.9, 0.05];
         assert_eq!(cluster(&[b.clone(), a.clone(), b2, a2], 0.3), vec![0, 1, 0, 1]);
         assert_eq!(cluster(&[a.clone(), b.clone()], 0.3), vec![0, 1]);
-        assert_eq!(cluster(&[a.clone(), a.clone(), a], 0.3), vec![0, 0, 0]);
+        assert_eq!(cluster(&[a.clone(), a.clone(), a.clone()], 0.3), vec![0, 0, 0]);
         assert!(cluster(&[], 0.3).is_empty());
+
+        // A 2s interjection that looks like nobody else is folded into its closest real speaker.
+        let odd = vec![0.6, 0.0, 0.8];
+        assert_eq!(assign_speakers(&[a.clone(), b.clone(), odd, a.clone()], &[6.0, 6.0, 2.0, 6.0], 0.9), vec![0, 1, 0, 0]);
 
         let mut labels = vec![None, Some(1), None, None, Some(0)];
         fill_gaps(&mut labels);

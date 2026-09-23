@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { identifySpeakers } from '@/lib/speakers';
 import { useRouter } from 'next/navigation';
 import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
@@ -292,6 +293,13 @@ export function useRecordingStop(
           console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId);
           console.log('   Transcripts:', freshTranscripts.length);
           console.log('   folder_path:', folderPath);
+
+          // Label who said what in the background; the meeting page waits for it
+          // before auto-summarising so the summary can attribute action items.
+          if (folderPath) {
+            identifySpeakers(meetingId, folderPath).catch(error =>
+              console.warn('Automatic speaker identification failed:', error));
+          }
 
           // Mark meeting as saved in IndexedDB (for recovery system)
           await markMeetingAsSaved();

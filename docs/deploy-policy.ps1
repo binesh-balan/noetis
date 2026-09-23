@@ -36,6 +36,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Run this script from an elevated PowerShell (Run as administrator) or as SYSTEM.'
+}
+
 $dir = Join-Path $env:ProgramData 'Noetis'
 $modelsDir = Join-Path $dir 'models'
 New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
@@ -73,9 +78,16 @@ if ($Endpoint -or $Model -or $ApiKey) {
 }
 
 $file = Join-Path $dir 'policy.json'
-$policy | ConvertTo-Json -Depth 4 | Set-Content -Path $file -Encoding UTF8
+# Replace rather than overwrite: an old file may carry unusable ACLs from a previous run.
+Remove-Item $file -Force -ErrorAction SilentlyContinue
+# UTF-8 without BOM (Set-Content -Encoding UTF8 on Windows PowerShell 5.1 adds one).
+[IO.File]::WriteAllText($file, ($policy | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
 
 # Administrators/SYSTEM: full control. Users: read (the app runs as the user and must read it).
-icacls $dir /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-545:(OI)(CI)RX" /T | Out-Null
+# Set the folder's ACL, then make everything inside inherit it. (Granting (OI)(CI) with /T
+# would strip files' inherited ACEs without granting anything, leaving them unreadable.)
+icacls $dir /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-545:(OI)(CI)RX" | Out-Null
+icacls "$dir\*" /reset /T /C /Q | Out-Null
+if (-not (Get-Acl $file).Access.Count) { throw "Could not set permissions on $file" }
 
 Write-Output "Noetis policy written to $file. Restart Noetis to apply."

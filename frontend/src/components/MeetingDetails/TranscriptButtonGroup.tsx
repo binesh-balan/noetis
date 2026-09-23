@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
+import { identifySpeakers } from '@/lib/speakers';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Copy, FolderOpen, RefreshCw, Users } from 'lucide-react';
@@ -40,28 +39,15 @@ export function TranscriptButtonGroup({
     if (!meetingId || !meetingFolderPath) return;
     const toastId = toast.loading('Identifying speakers...');
     setIdentifying(true);
-    const unlisteners: Array<() => void> = [];
-    const done = () => { unlisteners.forEach(u => u()); setIdentifying(false); };
-    type Payload = { meeting_id: string; message?: string; progress_percentage?: number; speakers?: number; error?: string };
     try {
-      unlisteners.push(await listen<Payload>('diarization-progress', e => {
-        if (e.payload.meeting_id === meetingId) toast.loading(`${e.payload.message} ${e.payload.progress_percentage}%`, { id: toastId });
-      }));
-      unlisteners.push(await listen<Payload>('diarization-complete', async e => {
-        if (e.payload.meeting_id !== meetingId) return;
-        done();
-        toast.success(`Found ${e.payload.speakers} speaker${e.payload.speakers === 1 ? '' : 's'}. Click a name to rename it.`, { id: toastId });
-        await onRefetchTranscripts?.();
-      }));
-      unlisteners.push(await listen<Payload>('diarization-error', e => {
-        if (e.payload.meeting_id !== meetingId) return;
-        done();
-        toast.error(`Speaker identification failed: ${e.payload.error}`, { id: toastId });
-      }));
-      await invoke('start_speaker_identification', { meetingId, meetingFolderPath });
+      const speakers = await identifySpeakers(meetingId, meetingFolderPath, (message, percent) =>
+        toast.loading(`${message} ${percent}%`, { id: toastId }));
+      toast.success(`Found ${speakers} speaker${speakers === 1 ? '' : 's'}. Click a name to rename it.`, { id: toastId });
+      await onRefetchTranscripts?.();
     } catch (e) {
-      done();
-      toast.error(String(e), { id: toastId });
+      toast.error(`Speaker identification failed: ${e instanceof Error ? e.message : e}`, { id: toastId });
+    } finally {
+      setIdentifying(false);
     }
   }, [meetingId, meetingFolderPath, onRefetchTranscripts]);
 

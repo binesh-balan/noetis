@@ -74,6 +74,8 @@ pub fn policy_path() -> PathBuf {
 }
 
 pub fn parse(json: &str) -> Result<ManagedPolicy, String> {
+    // Windows PowerShell 5.1 and Notepad may prepend a UTF-8 BOM, which serde_json rejects.
+    let json = json.trim_start_matches('\u{feff}');
     let policy: ManagedPolicy =
         serde_json::from_str(json).map_err(|e| format!("Invalid managed policy: {}", e))?;
     if let Some(s) = &policy.summary {
@@ -203,6 +205,7 @@ mod tests {
         assert!(p.templates_dir.is_some());
 
         assert!(parse("{}").unwrap().summary.is_none());
+        assert!(parse("\u{feff}{\"disableAnalytics\":true}").unwrap().disable_analytics, "BOM accepted");
         assert!(parse(r#"{"summary":{"endpoint":"ftp://x","model":"m"}}"#).is_err());
         assert!(parse(r#"{"summary":{"endpoint":"https://x","model":" "}}"#).is_err());
         assert!(parse(r#"{"sumary":{}}"#).is_err(), "typos must fail closed");
