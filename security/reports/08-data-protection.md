@@ -4,7 +4,7 @@ Static read-only review, baseline `a2cb62e`, branch `security-hardening`. Read [
 
 ## 1. Audio recording storage on disk
 
-- Default recordings root: `frontend/src-tauri/src/audio/recording_preferences.rs:43-77` — Windows → `%USERPROFILE%\Music\meetily-recordings` (fallback `Documents`), macOS → `~/Movies/meetily-recordings` (fallback `Documents`), Linux → `~/Documents/meetily-recordings`. User-overridable via `RecordingPreferences.save_folder`.
+- Default recordings root: `frontend/src-tauri/src/audio/recording_preferences.rs:43-77` — Windows → `%USERPROFILE%\Music\noetis-recordings` (fallback `Documents`), macOS → `~/Movies/noetis-recordings` (fallback `Documents`), Linux → `~/Documents/noetis-recordings`. User-overridable via `RecordingPreferences.save_folder`.
 - Per-meeting folder: `audio_processing.rs:35-58` `create_meeting_folder()` → `{sanitized_meeting_name}_{YYYY-MM-DD_HH-MM}`, created via `std::fs::create_dir_all` (OS-default permissions — no `PermissionsExt`/`chmod`/`set_permissions` anywhere in the crate).
 - Incremental pipeline: `audio/incremental_saver.rs` — 30s checkpoints at `<meeting_folder>/.checkpoints/audio_chunk_NNN.mp4`, merged via FFmpeg concat into `<meeting_folder>/audio.mp4` on `finalize()`.
 - Cleanup: `finalize()` removes `.checkpoints/` on successful merge (non-fatal on failure). If the app crashes mid-recording, checkpoints are deliberately **not** cleaned up — they're the crash-recovery mechanism (`recover_audio_from_checkpoints`, `incremental_saver.rs:240-371`).
@@ -37,7 +37,7 @@ A pyannote-based voice-embedding/diarization implementation does exist in source
 ## 6. Temporary files
 
 - Test-only `tempfile`/`tempdir` usage is pervasive across `#[cfg(test)]` blocks — not a production concern.
-- Real production use: `audio/decoder.rs:276-389` `convert_to_wav_with_ffmpeg()` creates a temp WAV (prefix `.meetily_decode_`) via `tempfile::Builder::tempfile_in(parent_dir)` in the **same directory as the input file** (avoids cross-device rename issues), returned as a `tempfile::TempPath` that auto-deletes on `Drop` — fires on success and on early `Err` returns via normal unwind. `Drop` doesn't run on a hard process kill, only unwind — acceptable caveat.
+- Real production use: `audio/decoder.rs:276-389` `convert_to_wav_with_ffmpeg()` creates a temp WAV (prefix `.noetis_decode_`) via `tempfile::Builder::tempfile_in(parent_dir)` in the **same directory as the input file** (avoids cross-device rename issues), returned as a `tempfile::TempPath` that auto-deletes on `Drop` — fires on success and on early `Err` returns via normal unwind. `Drop` doesn't run on a hard process kill, only unwind — acceptable caveat.
 - `incremental_saver.rs:153,291` writes an FFmpeg `concat_list.txt` inside `.checkpoints/`, removed as part of checkpoint cleanup.
 
 ## 7. Logs

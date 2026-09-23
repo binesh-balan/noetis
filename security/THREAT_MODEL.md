@@ -1,6 +1,6 @@
 # Threat Model
 
-Scope: Noetis, a local-first Tauri desktop app for meeting recording, transcription, and summarization (Meetily-derived). This document summarizes the threat model implied by the Phase 1-9 static audit (`security/reports/`); it has not been validated against a running build (Phase 10 deferred).
+Scope: Noetis, a local-first Tauri desktop app for meeting recording, transcription, and summarization (Noetis-derived). This document summarizes the threat model implied by the Phase 1-9 static audit (`security/reports/`); it has not been validated against a running build (Phase 10 deferred).
 
 ## Assets
 

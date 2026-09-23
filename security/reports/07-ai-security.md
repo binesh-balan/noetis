@@ -18,7 +18,7 @@ However, the file is parsed by whisper.cpp's C++ loader via `whisper-rs` 0.13.2 
 ## 2. Parakeet (ONNX) model verification and `ort` usage
 
 - Model catalog with **exact expected byte sizes** (not just minimum) per artifact (`parakeet_engine.rs:106-118`). Enforced while streaming and again on completion — stricter than the Whisper path, but **still not a cryptographic hash**; a same-byte-length malicious substitute would still pass.
-- v3 source (`meetily.towardsgeneralintelligence.com`) remains a project-operated, non-HuggingFace domain — unchanged from Phase 1's flag, still needs ownership/TLS posture confirmation.
+- v3 source (`former-upstream-model-mirror`) remains a project-operated, non-HuggingFace domain — unchanged from Phase 1's flag, still needs ownership/TLS posture confirmation.
 - Loading (`parakeet_engine/model.rs:88-143`): standard `ort` 2.0.0-rc.10 session construction with only `CPUExecutionProvider` registered. **No custom operators, no external op libraries, no `register_custom_ops_library`/plugin loading anywhere** (confirmed by grep).
 - ONNX is a declarative computation-graph format (op names + weights), not executable/pickle — since no custom-op DLL is loaded from the downloaded model directory, the ONNX attack surface here is limited to bugs in Microsoft's `onnxruntime` engine itself (a separate supply-chain component from the model weights, covered in Phase 1 §5).
 
@@ -44,7 +44,7 @@ Confirmed: Noetis contains **no Ollama model-pull/download logic**. `llm_client.
 |---|---|---|
 | `ggerganov/whisper.cpp` (HuggingFace) | ggerganov (MIT-licensed project) | `README.md:266` credits code borrowing — no explicit model-weights license link, only code attribution |
 | `istupakov/parakeet-tdt-0.6b-v3-onnx` (HuggingFace, v2 path) | istupakov (community ONNX conversion) | `README.md:270` thanks istupakov and NVIDIA by name; no license text linked for either the underlying NVIDIA Parakeet model (typically CC-BY-4.0, unconfirmed here) or the conversion |
-| `meetily.towardsgeneralintelligence.com` (v3 Parakeet host) | Project-operated, ownership unconfirmed | **No license/provenance statement anywhere for this host or the v3 artifact** |
+| `former-upstream-model-mirror` (v3 Parakeet host) | Project-operated, ownership unconfirmed | **No license/provenance statement anywhere for this host or the v3 artifact** |
 | `unsloth/Qwen3.5-*-GGUF` (HuggingFace) | Unsloth (GGUF quantization of Alibaba's Qwen) | **Not mentioned anywhere in README or docs.** No license link (Qwen carries its own license terms) |
 | `bartowski/google_gemma-3-*-GGUF` (HuggingFace) | bartowski (GGUF quantization of Google's Gemma) | **Not mentioned anywhere in README/docs.** Gemma's own usage-restriction license (Gemma Terms of Use) is not surfaced to the end user anywhere |
 
@@ -90,7 +90,7 @@ No sanitization/stripping of instruction-like text from the transcript happens b
 
 1. **Neither Whisper ggml, Qwen/Gemma GGUF, nor Parakeet ONNX downloads are verified against a cryptographic hash** — all rely on byte-size heuristics (90-110% variance, or exact-byte for Parakeet) plus a 4-byte magic number. Recommend pinning SHA256 digests for every catalog entry and verifying post-download before any file reaches whisper-rs/ort/llama-cpp-2.
 2. Because whisper.cpp/llama.cpp parsers are native, memory-unsafe code with a real history of parser-level CVEs, a passed magic+size check doesn't guarantee a safe-to-parse file — hash pinning (item 1) is the correct mitigation since it stops any tampered file from loading at all, regardless of internal validity.
-3. Parakeet v3's non-HuggingFace host (`meetily.towardsgeneralintelligence.com`) still needs ownership/TLS verification — carried over from Phase 1, unresolved.
+3. Parakeet v3's non-HuggingFace host (`former-upstream-model-mirror`) still needs ownership/TLS verification — carried over from Phase 1, unresolved.
 4. No license disclosure for the Qwen (unsloth) / Gemma (bartowski) GGUF sources anywhere in-app or in docs — flag for legal review given Gemma's usage-restricted terms.
 5. The prompt-injection "ignore embedded instructions" rule exists only in the final-report system prompt, not the per-chunk/combine-stage prompts used for long transcripts on Ollama/BuiltInAI — recommend adding it to all three for defense-in-depth.
 6. **No agentic/tool-execution capability exists anywhere downstream of LLM output** (local or cloud) — a genuine positive finding, not a gap.

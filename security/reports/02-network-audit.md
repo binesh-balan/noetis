@@ -52,8 +52,8 @@ Nothing transmits transcript or meeting content anywhere without the user first 
 
 | # | File:Line | Destination | Trigger | Method | Class |
 |---|---|---|---|---|---|
-|16|`frontend/src-tauri/src/whisper_engine/whisper_engine.rs:1077-1088`|`https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-*.bin` (12 variants)|User selects a Whisper model in Settings|GET (UA: `Meetily/<version>`, L1144)|MODEL_DOWNLOAD|
-|17|`frontend/src-tauri/src/parakeet_engine/parakeet_engine.rs:127`|`https://meetily.towardsgeneralintelligence.com/models/parakeet-tdt-0.6b-v3-onnx/*`|User selects Parakeet v3 model|GET (Range-resumable)|MODEL_DOWNLOAD — project-controlled CDN, not HuggingFace; openly declared in source, but worth independently confirming ownership by the Noetis/Meetily maintainers|
+|16|`frontend/src-tauri/src/whisper_engine/whisper_engine.rs:1077-1088`|`https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-*.bin` (12 variants)|User selects a Whisper model in Settings|GET (UA: `Noetis/<version>`, L1144)|MODEL_DOWNLOAD|
+|17|`frontend/src-tauri/src/parakeet_engine/parakeet_engine.rs:127`|`https://former-upstream-model-mirror/models/parakeet-tdt-0.6b-v3-onnx/*`|User selects Parakeet v3 model|GET (Range-resumable)|MODEL_DOWNLOAD — project-controlled CDN, not HuggingFace; openly declared in source, but worth independently confirming ownership by the Noetis/Noetis maintainers|
 |18|`parakeet_engine.rs:136`|`https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/resolve/...`|User selects Parakeet v2 model|GET|MODEL_DOWNLOAD|
 |19|`frontend/src-tauri/src/summary/summary_engine/models.rs:172,185,198,211`|`https://huggingface.co/unsloth/...`, `https://huggingface.co/bartowski/...` (Qwen3.5, Gemma-3 GGUF)|User enables "Built-in AI" (on-device LLM), selects model|GET|MODEL_DOWNLOAD|
 
@@ -61,9 +61,9 @@ Nothing transmits transcript or meeting content anywhere without the user first 
 
 | # | File:Line | Destination | Trigger | Method | Auth | Class |
 |---|---|---|---|---|---|---|
-|20|`frontend/src-tauri/tauri.conf.json:114-119`|`https://github.com/Zackriya-Solutions/meeting-minutes/releases/latest/download/latest.json`|App startup / manual "Check for updates" (Tauri updater plugin)|GET|Signature verified via bundled minisign pubkey|UPDATE_SERVICE|
+|20|`frontend/src-tauri/tauri.conf.json:114-119`|`https://github.com/upstream/meeting-minutes/releases/latest/download/latest.json`|App startup / manual "Check for updates" (Tauri updater plugin)|GET|Signature verified via bundled minisign pubkey|UPDATE_SERVICE|
 
-**Note:** updater points at the upstream Meetily maintainer's GitHub releases, not a Noetis-owned release feed — worth revisiting once Noetis has its own release pipeline (Phase 3/9).
+**Note:** updater points at the upstream Noetis maintainer's GitHub releases, not a Noetis-owned release feed — worth revisiting once Noetis has its own release pipeline (Phase 3/9).
 
 ## 6. Telemetry / analytics (PostHog)
 
@@ -85,7 +85,7 @@ Note: `backend/` is a legacy/alternate server (uses `pydantic_ai` providers for 
 
 | # | File:Line | Destination | Trigger | Class |
 |---|---|---|---|---|
-|25|`frontend/src/components/About.tsx:26`|`https://meetily.zackriya.com/#about`|"About" link → `open_external_url` (OS browser)|OPTIONAL_EXTERNAL|
+|25|`frontend/src/components/About.tsx:26`|`the former upstream website`|"About" link → `open_external_url` (OS browser)|OPTIONAL_EXTERNAL|
 |26|`frontend/src/components/AnalyticsConsentSwitch.tsx:150`|GitHub `PRIVACY_POLICY.md`|"View Privacy Policy" click|OPTIONAL_EXTERNAL|
 |27|`frontend/src/components/ModelSettingsModal.tsx:739,1236`|`https://ollama.com/download`|"Download Ollama" prompt click|OPTIONAL_EXTERNAL|
 |28|`frontend/src/components/BluetoothPlaybackWarning.tsx:84`|GitHub doc link (plain `<a href>`)|Click|OPTIONAL_EXTERNAL|
@@ -107,6 +107,6 @@ Note: `backend/` is a legacy/alternate server (uses `pydantic_ai` providers for 
 1. Decide whether to keep or gate the 4 cloud LLM providers (OpenAI/Groq/OpenRouter/Anthropic) behind a stricter "strict offline mode" switch that disables them entirely.
 2. Remove the dormant `https://api.ollama.ai` CSP allowance (§3 note) — no code path uses it.
 3. Harden `backend/app/main.py:646` to bind `127.0.0.1` instead of `0.0.0.0` by default.
-4. Confirm ownership/trust of `meetily.towardsgeneralintelligence.com` (Parakeet v3 model host) before treating it as equivalent-trust to HuggingFace.
-5. Decide whether the updater should keep pointing at the upstream Meetily GitHub releases or move to a Noetis-owned release feed once one exists.
+4. Confirm ownership/trust of `former-upstream-model-mirror` (Parakeet v3 model host) before treating it as equivalent-trust to HuggingFace.
+5. Decide whether the updater should keep pointing at the upstream Noetis GitHub releases or move to a Noetis-owned release feed once one exists.
 6. Delete dead files `lib_old_complex.rs` and `audio/core-old.rs` (housekeeping, zero risk).

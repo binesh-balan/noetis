@@ -11,7 +11,7 @@ Static read-only review, baseline `a2cb62e`, branch `security-hardening`. No wor
 
 ## 2. Secrets exposure in workflows
 
-Full `secrets.*` inventory: `SM_HOST`, `SM_API_KEY`, `SM_CLIENT_CERT_PASSWORD`, `SM_CODE_SIGNING_CERT_SHA1_HASH`, `SM_CLIENT_CERT_FILE_B64` (DigiCert KeyLocker), `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `MEETILY_RSA_PUBLIC_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GITHUB_TOKEN`/`GH_TOKEN`. All appear only in `env:`/`with:` contexts for their matching step — no misuse outside expected purpose.
+Full `secrets.*` inventory: `SM_HOST`, `SM_API_KEY`, `SM_CLIENT_CERT_PASSWORD`, `SM_CODE_SIGNING_CERT_SHA1_HASH`, `SM_CLIENT_CERT_FILE_B64` (DigiCert KeyLocker), `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_ID_PASSWORD`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `NOETIS_RSA_PUBLIC_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GITHUB_TOKEN`/`GH_TOKEN`. All appear only in `env:`/`with:` contexts for their matching step — no misuse outside expected purpose.
 
 ### Finding: partial secret printed to CI logs (bypasses secret masking)
 
@@ -37,7 +37,7 @@ Repo-wide grep for `pull_request`/`pull_request_target` across every `.yml`/`.ya
 
 - `TAURI_SIGNING_PRIVATE_KEY`/`_PASSWORD` are GitHub Actions repo secrets referenced only in `tauri-apps/tauri-action@v0`'s `env:` block across every build workflow — the intended, documented usage; never written to disk or echoed by repo-owned script code.
 - Risk is indirect, not a log leak: (a) anyone with write access to the workflow files could add a step echoing the key — branch-protection on workflow-file changes is the relevant control, out of scope for this static review; (b) `tauri-apps/tauri-action@v0` is pinned to a **major-version tag**, not a SHA — a compromised release of that action could exfiltrate the key it receives directly. This is the highest-value action in the unpinned list (Phase 1 §8) to pin to a commit SHA.
-- Updater pubkey (`tauri.conf.json:113-120`) and the private key are consistent with each other. Since the updater endpoint points at upstream `Zackriya-Solutions/meeting-minutes` releases (Phase 1 finding #4): **confirm which keypair is actually embedded** — if this fork signs with a different private key than upstream, its builds will fail update-verification against the embedded pubkey unless that pubkey was also regenerated for a fork-owned keypair.
+- Updater pubkey (`tauri.conf.json:113-120`) and the private key are consistent with each other. Since the updater endpoint points at upstream `upstream/meeting-minutes` releases (Phase 1 finding #4): **confirm which keypair is actually embedded** — if this fork signs with a different private key than upstream, its builds will fail update-verification against the embedded pubkey unless that pubkey was also regenerated for a fork-owned keypair.
 
 ## 6. Build reproducibility
 

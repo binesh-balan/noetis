@@ -1,11 +1,11 @@
 # Legacy Backend Archive
 
 This directory contains the archived Python/FastAPI, Docker, and standalone
-whisper-server backend implementation from older Meetily releases.
+whisper-server backend implementation from older Noetis releases.
 
 ## Current Supported Architecture
 
-Meetily no longer uses this backend as the supported application path. The
+Noetis no longer uses this backend as the supported application path. The
 current app is a self-contained Tauri desktop application:
 
 - Next.js provides the desktop UI from `frontend/src`.

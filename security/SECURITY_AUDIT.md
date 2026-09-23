@@ -1,6 +1,6 @@
 # Noetis Security Audit — Summary
 
-**Scope**: Full static security review of the Noetis codebase (a Meetily-derived, privacy-first Tauri desktop meeting app), Phases 1-9 of the audit plan, plus remediation of all 18 findings the audit surfaced. Phase 10 (build + runtime network monitoring) was explicitly deferred by the repo owner and has not run. Baseline commit `a2cb62e` ("Release v0.4.1"), work done on branch `security-hardening`.
+**Scope**: Full static security review of the Noetis codebase (a Noetis-derived, privacy-first Tauri desktop meeting app), Phases 1-9 of the audit plan, plus remediation of all 18 findings the audit surfaced. Phase 10 (build + runtime network monitoring) was explicitly deferred by the repo owner and has not run. Baseline commit `a2cb62e` ("Release v0.4.1"), work done on branch `security-hardening`.
 
 ## 1. Executive summary
 
