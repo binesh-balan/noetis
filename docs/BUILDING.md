@@ -1,4 +1,4 @@
-# Building Meetily from Source
+# Building Noetis from Source
 
 This guide explains source builds on each supported platform. Start with the build notes below, then use the platform instructions that match your machine.
 
@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 
 Frozen installation keeps the lockfile and installed dependency set aligned. When intentionally changing dependencies, update and commit `pnpm-lock.yaml`.
 
-- **Linux:** Meetily is built from source; choose acceleration for the environment where you build.
+- **Linux:** Noetis is built from source; choose acceleration for the environment where you build.
 - **Windows packages:** Distribution builds use Vulkan-enabled Whisper and require an AVX2-capable x64 CPU. AVX-512 is not required.
 - **CUDA:** NVIDIA CUDA support requires a compatible source build and CUDA toolchain; the standard Windows installer does not select it automatically.
 
@@ -23,7 +23,7 @@ Frozen installation keeps the lockfile and installed dependency set aligned. Whe
 
 ## 🐧 Building on Linux
 
-This guide helps you build Meetily on Linux with **automatic GPU acceleration**. The build system detects your hardware and configures the best performance automatically.
+This guide helps you build Noetis on Linux with **automatic GPU acceleration**. The build system detects your hardware and configures the best performance automatically.
 
 ---
 
@@ -243,7 +243,7 @@ TAURI_GPU_FEATURE=openblas ./build-gpu.sh
 After successful build:
 
 ```
-src-tauri/target/release/bundle/appimage/Meetily_<version>_amd64.AppImage
+src-tauri/target/release/bundle/appimage/Noetis_<version>_amd64.AppImage
 ```
 
 ---
@@ -320,6 +320,13 @@ The application will be built with Metal GPU acceleration automatically.
 - **pnpm:** Install version 9.15.9 with `npm install -g pnpm@9.15.9`.
 - **Visual Studio Build Tools:** Install the "Desktop development with C++" workload from the Visual Studio Installer.
 - **CMake:** Download and install from [cmake.org](https://cmake.org/download/).
+- **LLVM (libclang) 18.x:** needed by `whisper-rs-sys` bindgen; `LIBCLANG_PATH` must point at its `bin`
+  (e.g. `winget install LLVM.LLVM --version 18.1.8`). Newer clang (e.g. 23) generates empty
+  `whisper_full_params` bindings and the build fails with `no field ... on type whisper_full_params`.
+- **llama-helper sidecar:** build it once from the repo root (`cargo build --release -p llama-helper`) and
+  copy `target/release/llama-helper.exe` to
+  `frontend/src-tauri/binaries/llama-helper-x86_64-pc-windows-msvc.exe`; `tauri-build` refuses to build
+  without it.
 
 ### 2. Build and Run
 

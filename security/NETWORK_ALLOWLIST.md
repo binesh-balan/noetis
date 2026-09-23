@@ -27,16 +27,18 @@ Derived from `security/reports/02-network-audit.md` (static analysis, not yet ru
 |---|---|
 | `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-*.bin` | Whisper model download |
 | `https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx/...` | Parakeet v2 model download |
-| `https://meetily.towardsgeneralintelligence.com/models/parakeet-tdt-0.6b-v3-onnx/*` | Parakeet v3 model download — **non-HuggingFace host, ownership not independently verified, see RESIDUAL_RISKS.md** |
+| `https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c0.../*` | Parakeet v3 model download — pinned commit, all 4 artifacts SHA-256 pinned |
 | `https://huggingface.co/unsloth/...`, `https://huggingface.co/bartowski/...` | On-device (Qwen/Gemma) GGUF model downloads |
-| `https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/...` | Build-time FFmpeg binary fetch |
+| `https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/ff1ac5bc.../voxceleb_resnet34.onnx` | Speaker-identification model, fetched on first "Speakers" click — pinned commit, size + SHA-256 pinned, blocked in Strict Offline Mode |
+| Summary endpoint from managed `policy.json` (e.g. `https://<resource>.services.ai.azure.com/openai/v1`) | Org-enforced summary provider when IT deploys a policy — see docs/ENTERPRISE_POLICY.md |
+| `https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/...` | Build-time FFmpeg binary fetch |
 | `https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/...` | Build-time ONNX Runtime fetch |
 
 ## Update service
 
 | Destination | Purpose |
 |---|---|
-| `https://github.com/Zackriya-Solutions/meeting-minutes/releases/latest/download/latest.json` | Tauri auto-updater manifest check (fires on every app startup) — **points at the upstream repo, not this fork; see RESIDUAL_RISKS.md** |
+| `https://github.com/binesh-balan/noetis/releases/latest/download/latest.json` | Tauri auto-updater manifest check (fires on every app startup) — this fork's releases; signing key still pending, see RESIDUAL_RISKS.md |
 
 ## Telemetry — opt-in, default OFF
 
@@ -46,7 +48,7 @@ Derived from `security/reports/02-network-audit.md` (static analysis, not yet ru
 
 ## System-browser links (not app HTTP requests)
 
-`https://meetily.zackriya.com/#about`, the project's `PRIVACY_POLICY.md` on GitHub, `https://ollama.com/download` — opened via the OS default browser on explicit user click, not fetched by the app itself.
+the project's `PRIVACY_POLICY.md` on GitHub, `https://ollama.com/download` — opened via the OS default browser on explicit user click, not fetched by the app itself.
 
 ## Known gaps (do not yet trust this list as complete or enforced)
 

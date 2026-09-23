@@ -85,13 +85,9 @@ pub struct ModelInfo {
 struct ArtifactSpec {
     filename: &'static str,
     exact_bytes: u64,
-    /// Pinned SHA-256 (lowercase hex), when known. `None` for the v3 artifacts: they're
-    /// served from a non-HuggingFace host (meetily.towardsgeneralintelligence.com) with
-    /// no git-lfs-pointer-style metadata endpoint to fetch a hash from without
-    /// downloading the full ~650MB file, which wasn't done here — see
-    /// security/reports/07-ai-security.md §2 and security/RESIDUAL_RISKS.md. The v2
-    /// artifacts are pinned against HuggingFace's own git-lfs oid for the exact commit
-    /// this crate already downloads from (`0bbb45a3...`).
+    /// Pinned SHA-256 (lowercase hex), when known. Both model versions download from
+    /// HuggingFace at a fixed commit and are pinned against its git-lfs oids (plus a
+    /// self-computed hash for the non-LFS v3 `vocab.txt`).
     sha256: Option<&'static str>,
 }
 
@@ -111,11 +107,30 @@ impl ModelSpec {
     }
 }
 
+// istupakov/parakeet-tdt-0.6b-v3-onnx at commit 8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce.
+// ONNX hashes are HuggingFace's git-lfs oids; vocab.txt (not in LFS) was hashed from
+// the same commit. Sizes match the previously mirrored files byte-for-byte.
 const PARAKEET_V3_ARTIFACTS: &[ArtifactSpec] = &[
-    ArtifactSpec { filename: "encoder-model.int8.onnx", exact_bytes: 652_183_999, sha256: None },
-    ArtifactSpec { filename: "decoder_joint-model.int8.onnx", exact_bytes: 18_202_004, sha256: None },
-    ArtifactSpec { filename: "nemo128.onnx", exact_bytes: 139_764, sha256: None },
-    ArtifactSpec { filename: "vocab.txt", exact_bytes: 93_939, sha256: None },
+    ArtifactSpec {
+        filename: "encoder-model.int8.onnx",
+        exact_bytes: 652_183_999,
+        sha256: Some("6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09"),
+    },
+    ArtifactSpec {
+        filename: "decoder_joint-model.int8.onnx",
+        exact_bytes: 18_202_004,
+        sha256: Some("eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70"),
+    },
+    ArtifactSpec {
+        filename: "nemo128.onnx",
+        exact_bytes: 139_764,
+        sha256: Some("a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f"),
+    },
+    ArtifactSpec {
+        filename: "vocab.txt",
+        exact_bytes: 93_939,
+        sha256: Some("d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+    },
 ];
 
 // SHA-256 values fetched from HuggingFace's git-lfs pointer metadata for
@@ -151,7 +166,7 @@ const PARAKEET_MODEL_SPECS: &[ModelSpec] = &[
         quantization: QuantizationType::Int8,
         speed: "Ultra Fast (v3)",
         description: "Real time on M4 Max, latest version with int8 quantization",
-        source_base_url: "https://meetily.towardsgeneralintelligence.com/models/parakeet-tdt-0.6b-v3-onnx",
+        source_base_url: "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce",
         artifacts: PARAKEET_V3_ARTIFACTS,
     },
     ModelSpec {
@@ -318,7 +333,7 @@ impl ParakeetEngine {
                 dirs::data_dir()
                     .or_else(|| dirs::home_dir())
                     .ok_or_else(|| anyhow!("Could not find system data directory"))?
-                    .join("Meetily")
+                    .join("Noetis")
                     .join("models")
                     .join("parakeet")
             }

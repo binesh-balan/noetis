@@ -6,9 +6,11 @@
 use sha2::{Digest, Sha256};
 
 /// Expected (size, sha256) for each FFmpeg release archive we download, keyed by the
-/// archive's filename. Values are GitHub's own server-computed digest for each asset of
-/// https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/tag/0.0.1 (fetched via
-/// `gh release view 0.0.1 --repo Zackriya-Solutions/ffmpeg-binaries --json assets`), not
+/// archive's filename. Values are GitHub's own server-computed digests for the upstream
+/// ffmpeg-binaries 0.0.1 release; the mirror at
+/// https://github.com/binesh-balan/ffmpeg-binaries/releases/tag/0.0.1 must serve the same
+/// bytes (check via
+/// `gh release view 0.0.1 --repo binesh-balan/ffmpeg-binaries --json assets`), not
 /// self-computed — this closes the checksum gap noted in
 /// security/reports/04-native-security.md §6 / §5, matching the same verification the
 /// ONNX Runtime downloader in build/onnxruntime.rs already does. If this release is ever
@@ -227,22 +229,22 @@ fn get_ffmpeg_url_for_target(target: &str) -> Result<String, String> {
     // Platform-specific URLs
     let url = if target.contains("windows") {
         // Windows
-        "https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-8.0.1-essentials_build.zip"
+        "https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-8.0.1-essentials_build.zip"
     } else if target.contains("apple") {
         if target.contains("aarch64") {
             // Apple Silicon (M1/M2/M3)
-            "https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/ffmpeg80arm.zip"
+            "https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/ffmpeg80arm.zip"
         } else {
             // Intel Mac
-            "https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-8.0.1.zip"
+            "https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-8.0.1.zip"
         }
     } else if target.contains("linux") {
         if target.contains("aarch64") || target.contains("arm") {
             // Linux ARM64
-            "https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-release-arm64-static.tar.xz"
+            "https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-release-arm64-static.tar.xz"
         } else {
             // Linux x86_64
-            "https://github.com/Zackriya-Solutions/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-release-amd64-static.tar.xz"
+            "https://github.com/binesh-balan/ffmpeg-binaries/releases/download/0.0.1/ffmpeg-release-amd64-static.tar.xz"
         }
     } else {
         return Err(format!("Unsupported target platform: {}", target));
