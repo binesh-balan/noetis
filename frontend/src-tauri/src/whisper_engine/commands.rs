@@ -89,7 +89,7 @@ fn discover_models_standalone() -> Result<Vec<ModelInfo>, String> {
     let mut models = Vec::new();
 
     for &(name, filename, size_mb, accuracy, speed, description) in model_configs {
-        let model_path = whisper_dir.join(filename);
+        let model_path = crate::policy::org_model_path(filename).unwrap_or_else(|| whisper_dir.join(filename));
         let status = if model_path.exists() {
             match std::fs::metadata(&model_path) {
                 Ok(metadata) => {
@@ -423,6 +423,7 @@ pub async fn whisper_download_model(
     app_handle: tauri::AppHandle,
     model_name: String,
 ) -> Result<(), String> {
+    crate::policy::require_downloads_allowed()?;
     let engine = {
         let guard = WHISPER_ENGINE.lock().unwrap();
         guard.as_ref().cloned()

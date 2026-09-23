@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import {
   Upload,
   Globe,
@@ -70,6 +71,8 @@ export function ImportAudioDialog({
   preselectedFile,
   onComplete,
 }: ImportAudioDialogProps) {
+  // Org policy pins model and language; the core enforces it, so hide the pickers.
+  const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
   const router = useRouter();
   const { refetchMeetings } = useSidebar();
   const { selectedLanguage, transcriptModelConfig } = useConfig();
@@ -340,7 +343,7 @@ export function ImportAudioDialog({
                     )}
                   </button>
 
-                  {showAdvanced && (
+                  {showAdvanced && !transcriptionManaged && (
                     <div className="p-3 pt-0 space-y-4 border-t">
                       {/* Language selector */}
                       {!isParakeetModel ? (

@@ -382,7 +382,9 @@ impl ParakeetEngine {
             let mut validation_errors = Vec::new();
 
             for spec in specs {
-                let model_path = self.models_dir.join(spec.name);
+                // IT-supplied copy (policy modelsDir/parakeet) wins over the per-user folder.
+                let model_path = crate::policy::org_model_path(std::path::Path::new("parakeet").join(spec.name))
+                    .unwrap_or_else(|| self.models_dir.join(spec.name));
                 let status = if model_path.exists() {
                     match Self::validate_model_directory(&model_path, spec.artifacts) {
                         Ok(()) => ModelStatus::Available,

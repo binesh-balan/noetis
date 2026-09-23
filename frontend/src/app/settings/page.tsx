@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
@@ -27,6 +28,9 @@ const TABS = [
 export default function SettingsPage() {
   const router = useRouter();
   const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
+  // Org-managed transcription: hide the tab entirely.
+  const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
+  const tabs = TABS.filter(t => !(transcriptionManaged && t.value === 'Transcriptionmodels'));
 
   // Animation state for tabs
   const [activeTab, setActiveTab] = useState('general');
@@ -55,14 +59,14 @@ export default function SettingsPage() {
 
   // Update underline position when active tab changes
   useLayoutEffect(() => {
-    const activeIndex = TABS.findIndex(tab => tab.value === activeTab);
+    const activeIndex = tabs.findIndex(tab => tab.value === activeTab);
     const activeTabElement = tabRefs.current[activeIndex];
 
     if (activeTabElement) {
       const { offsetLeft, offsetWidth } = activeTabElement;
       setUnderlineStyle({ left: offsetLeft, width: offsetWidth });
     }
-  }, [activeTab]);
+  }, [activeTab, tabs]);
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -88,7 +92,7 @@ export default function SettingsPage() {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="bg-transparent relative rounded-none border-b border-gray-200 p-0 h-auto">
-              {TABS.map((tab, index) => {
+              {tabs.map((tab, index) => {
                 const Icon = tab.icon;
                 return (
                   <TabsTrigger

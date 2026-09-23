@@ -214,7 +214,8 @@ impl WhisperEngine {
         let model_configs = WHISPER_MODEL_CATALOG;
 
         for &(name, filename, size_mb, accuracy, speed, description) in model_configs {
-            let model_path = models_dir.join(filename);
+            // IT-supplied copy (policy modelsDir) wins over the per-user models folder.
+            let model_path = crate::policy::org_model_path(filename).unwrap_or_else(|| models_dir.join(filename));
             let status = if model_path.exists() {
                 // Check if file size is reasonable (at least 1MB for a valid model)
                 match std::fs::metadata(&model_path) {

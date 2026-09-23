@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getVersion } from '@tauri-apps/api/app';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import Image from 'next/image';
 import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch";
 import { UpdateDialog } from "./UpdateDialog";
@@ -10,6 +11,7 @@ import { toast } from 'sonner';
 
 
 export function About() {
+    const analyticsLocked = useManagedPolicy()?.analyticsDisabled ?? false;
     const [currentVersion, setCurrentVersion] = useState<string>('0.4.1');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -114,7 +116,7 @@ export function About() {
                 </p>
             </div>
 
-            <AnalyticsConsentSwitch />
+            {!analyticsLocked && <AnalyticsConsentSwitch />}
 
             {/* Update Dialog */}
             <UpdateDialog

@@ -283,11 +283,15 @@ async fn ensure_model<R: Runtime>(app: &AppHandle<R>, meeting_id: &str) -> Resul
     use sha2::{Digest, Sha256};
     use tokio::io::AsyncWriteExt;
 
+    if let Some(org) = crate::policy::org_model_path(Path::new("diarization").join(MODEL_FILE)) {
+        return Ok(org);
+    }
     let dir = app.path().app_data_dir()?.join("models").join("diarization");
     let path = dir.join(MODEL_FILE);
     if tokio::fs::metadata(&path).await.map(|m| m.len() == MODEL_BYTES).unwrap_or(false) {
         return Ok(path);
     }
+    crate::policy::require_downloads_allowed().map_err(|e| anyhow!(e))?;
     if crate::network_policy::is_strict_offline() {
         return Err(anyhow!(
             "The speaker model ({} MB) must be downloaded once, but Strict Offline Mode is on",

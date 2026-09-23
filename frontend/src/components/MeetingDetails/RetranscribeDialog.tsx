@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { RefreshCw, Globe, Loader2, AlertCircle, CheckCircle2, X, Cpu } from 'lucide-react';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,8 @@ export function RetranscribeDialog({
   meetingFolderPath,
   onComplete,
 }: RetranscribeDialogProps) {
+  // Org policy pins model and language; the core enforces it, so hide the pickers.
+  const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
   const { selectedLanguage, transcriptModelConfig } = useConfig();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<RetranscriptionProgress | null>(null);
@@ -300,7 +303,7 @@ export function RetranscribeDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {!isProcessing && !error && (
+          {!isProcessing && !error && !transcriptionManaged && (
             !isParakeetModel ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -336,7 +339,7 @@ export function RetranscribeDialog({
             )
           )}
 
-          {!isProcessing && !error && availableModels.length > 0 && (
+          {!isProcessing && !error && !transcriptionManaged && availableModels.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Cpu className="h-4 w-4 text-muted-foreground" />

@@ -1,5 +1,6 @@
 import { ModelConfig } from "@/components/ModelSettingsModal";
 import { PreferenceSettings } from "@/components/PreferenceSettings";
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import { DeviceSelection } from "@/components/DeviceSelection";
 import { LanguageSelection } from "@/components/LanguageSelection";
 import { TranscriptSettings } from "@/components/TranscriptSettings";
@@ -39,6 +40,7 @@ export function SettingsModals({
   messages,
   onClose,
 }: SettingsModalsProps) {
+  const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
   // Contexts
   const {
     modelConfig,
@@ -222,12 +224,14 @@ export function SettingsModals({
             </button>
           </div>
 
-          <LanguageSelection
+          {transcriptionManaged ? (
+            <p className="text-sm text-gray-600">Transcription language is set by your organization.</p>
+          ) : <LanguageSelection
             selectedLanguage={selectedLanguage}
             onLanguageChange={setSelectedLanguage}
             disabled={isRecording}
             provider={transcriptModelConfig.provider}
-          />
+          />}
 
           <div className="mt-6 flex justify-end">
             <button

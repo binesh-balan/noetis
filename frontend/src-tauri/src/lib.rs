@@ -445,6 +445,10 @@ async fn set_language_preference(language: String) -> Result<(), String> {
 
 // Internal helper function to get language preference (for use within Rust code)
 pub fn get_language_preference_internal() -> Option<String> {
+    // An org-pinned language wins over whatever the UI pushed.
+    if let Some(lang) = policy::managed_transcription().and_then(|t| t.language) {
+        return Some(lang);
+    }
     LANGUAGE_PREFERENCE.lock().ok().map(|lang| lang.clone())
 }
 

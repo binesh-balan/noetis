@@ -786,6 +786,11 @@ pub async fn start_retranscription_command<R: Runtime>(
     model: Option<String>,
     provider: Option<String>,
 ) -> Result<RetranscriptionStarted, String> {
+    // Org policy pins provider/model/language regardless of what the dialog sent.
+    let (language, model, provider) = match crate::policy::managed_transcription() {
+        Some(t) => (t.language.or(language), Some(t.model), Some(t.provider)),
+        None => (language, model, provider),
+    };
 
     // Check if retranscription is already in progress (guard will be acquired in start_retranscription)
     if RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {

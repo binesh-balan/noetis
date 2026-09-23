@@ -507,6 +507,17 @@ pub async fn api_get_model_config<R: Runtime>(
             }
         }
         Ok(None) => {
+            // Fresh install under a managed policy: report the org model as configured so
+            // the UI never prompts the user to pick one.
+            if let Some(cfg) = crate::policy::managed_summary()? {
+                return Ok(Some(ModelConfig {
+                    provider: "custom-openai".into(),
+                    model: cfg.model,
+                    whisper_model: crate::config::DEFAULT_WHISPER_MODEL.into(),
+                    api_key: None,
+                    ollama_endpoint: None,
+                }));
+            }
             log_warn!("⚠️ No model config found in database - database may be empty or settings table not initialized");
             Ok(None)
         }
@@ -625,6 +636,9 @@ pub async fn api_get_transcript_config<R: Runtime>(
     _auth_token: Option<String>,
 ) -> Result<Option<TranscriptConfig>, String> {
     log_info!("api_get_transcript_config called (native)");
+    if let Some(t) = crate::policy::managed_transcription() {
+        return Ok(Some(TranscriptConfig { provider: t.provider, model: t.model, api_key: None }));
+    }
     let pool = state.db_manager.pool();
 
     match SettingsRepository::get_transcript_config(pool).await {
@@ -681,6 +695,10 @@ pub async fn api_save_transcript_config<R: Runtime>(
         "api_save_transcript_config called (native) for provider '{}'",
         &provider
     );
+    // Managed: the policy is authoritative; ignore UI writes (e.g. sidebar sync) silently.
+    if crate::policy::managed_transcription().is_some() {
+        return Ok(serde_json::json!({ "status": "managed", "message": "Transcription settings are managed by your organization" }));
+    }
     let pool = state.db_manager.pool();
 
     if let Err(e) = SettingsRepository::save_transcript_config(pool, &provider, &model).await {

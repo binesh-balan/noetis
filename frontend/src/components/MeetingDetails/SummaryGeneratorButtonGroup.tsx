@@ -1,6 +1,7 @@
 "use client";
 
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import {
   Dialog,
   DialogContent,
@@ -56,6 +57,7 @@ export function SummaryGeneratorButtonGroup({
   languageSlot
 }: SummaryGeneratorButtonGroupProps) {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const summaryManaged = useManagedPolicy()?.summaryManaged ?? false;
 
   // Expose the function to open the modal via callback registration
   useEffect(() => {
@@ -129,8 +131,8 @@ export function SummaryGeneratorButtonGroup({
 
       {languageSlot}
 
-      {/* Settings button */}
-      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+      {/* Settings button (hidden when the organization manages the model) */}
+      {!summaryManaged && <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
         <DialogTrigger asChild>
           <Button
             variant="outline"
@@ -158,7 +160,7 @@ export function SummaryGeneratorButtonGroup({
             layout="dialog"
           />
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* Template selector dropdown */}
       {availableTemplates.length > 0 && (
