@@ -54,7 +54,7 @@ export function HomeIdle({ startControl }: { startControl: ReactNode }) {
       <p className="max-w-md text-xs text-muted-foreground">
         <Mic className="mr-1 inline h-3 w-3" />
         {mic} · {system} · {transcriptModelConfig.model}{' '}
-        <Link href="/settings" className="text-primary hover:underline">Change</Link>
+        <Link href="/settings?tab=recording" className="text-primary hover:underline">Change</Link>
       </p>
     </div>
   );
