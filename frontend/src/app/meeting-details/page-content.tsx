@@ -192,6 +192,9 @@ export default function PageContent({
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className="flex flex-col h-full min-w-0 bg-muted"
     >
+      <div className="flex h-11 items-center gap-2 border-b border-border bg-background px-4">
+        <h1 className="truncate text-sm font-semibold">{meetingData.meetingTitle}</h1>
+      </div>
       <div className="flex flex-1 min-w-0 overflow-hidden">
         <MeetingDetailsSplitView
           activeTab={activeTab}

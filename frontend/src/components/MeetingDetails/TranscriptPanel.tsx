@@ -80,15 +80,18 @@ export function TranscriptPanel({
   return (
     <div className="flex h-full min-w-0 w-full bg-background flex-col relative @container">
       {/* Title area */}
-      <div className="p-4 border-b border-border">
-        <TranscriptButtonGroup
-          transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
-          onCopyTranscript={onCopyTranscript}
-          onOpenMeetingFolder={onOpenMeetingFolder}
-          meetingId={meetingId}
-          meetingFolderPath={meetingFolderPath}
-          onRefetchTranscripts={onRefetchTranscripts}
-        />
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Transcript</h2>
+        <div className="ml-auto min-w-0">
+          <TranscriptButtonGroup
+            transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
+            onCopyTranscript={onCopyTranscript}
+            onOpenMeetingFolder={onOpenMeetingFolder}
+            meetingId={meetingId}
+            meetingFolderPath={meetingFolderPath}
+            onRefetchTranscripts={onRefetchTranscripts}
+          />
+        </div>
       </div>
 
       {/* Transcript content - use virtualized view for better performance */}
@@ -113,7 +116,7 @@ export function TranscriptPanel({
 
       {/* Custom prompt input at bottom of transcript section */}
       {!isRecording && convertedSegments.length > 0 && (
-        <div className="p-1 border-t border-border">
+        <div className="p-4 border-t border-border">
           <textarea
             placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
             className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-background shadow-sm min-h-[80px] resize-y"

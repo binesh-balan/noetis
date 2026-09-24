@@ -22,6 +22,7 @@ import {
 } from '@/lib/summary-language-preferences';
 import { hasVisibleSummaryContent } from '@/lib/summary-content';
 import type { ExportFormat } from '@/lib/export-document';
+import { toolbarButtonClass } from './TranscriptButtonGroup';
 
 interface SummaryPanelProps {
   meeting: {
@@ -220,14 +221,15 @@ export function SummaryPanel({
     <Popover open={langPickerOpen} onOpenChange={setLangPickerOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className={toolbarButtonClass}
           title={`Summary language: ${effectiveLangLabel}${isLocalFallbackLanguage ? ' (saved on this device)' : ''}`}
           aria-label="Set summary language"
         >
-          <Languages size={18} />
+          <Languages />
           <span className="hidden @[40rem]:inline">{effectiveLangLabel}</span>
-          <ChevronDown size={14} className="text-muted-foreground" />
+          <ChevronDown className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -247,8 +249,9 @@ export function SummaryPanel({
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-background overflow-hidden h-full w-full @container">
       {/* Top-level actions — always visible, same pattern as TranscriptPanel */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-center w-full min-w-0 gap-2 flex-wrap">
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Summary</h2>
+        <div className="ml-auto flex min-w-0 items-center gap-2 flex-wrap justify-end">
           <div className="flex-shrink-0 min-w-0">
             <SummaryGeneratorButtonGroup
               modelConfig={modelConfig}
@@ -299,7 +302,7 @@ export function SummaryPanel({
         />
       ) : (
         <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
-          <div className="p-6 w-full">
+          <div className="p-4 w-full">
             <BlockNoteSummaryView
               ref={summaryRef}
               summaryData={aiSummary}

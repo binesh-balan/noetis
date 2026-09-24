@@ -10,6 +10,8 @@ import {
   DropdownMenuCheckboxItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import type { ExportFormat } from '@/lib/export-document';
+import { cn } from '@/lib/utils';
+import { toolbarButtonClass } from './TranscriptButtonGroup';
 
 interface SummaryUpdaterButtonGroupProps {
   isSaving: boolean;
@@ -36,9 +38,9 @@ export function SummaryUpdaterButtonGroup({
     <ButtonGroup>
       {/* Save button */}
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
-        className={`${isDirty ? 'bg-success' : ""}`}
+        className={cn(toolbarButtonClass, isDirty && 'border-success text-success hover:bg-success/10 hover:text-success')}
         title={isSaving ? "Saving" : "Save Changes"}
         onClick={() => {
           Analytics.trackButtonClick('save_changes', 'meeting_details');
@@ -61,14 +63,14 @@ export function SummaryUpdaterButtonGroup({
 
       {/* Copy button */}
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         title="Copy Summary"
         onClick={() => {
           Analytics.trackButtonClick('copy_summary', 'meeting_details');
           onCopy();
         }}
-        className="cursor-pointer"
+        className={cn(toolbarButtonClass, 'cursor-pointer')}
       >
         <Copy />
         <span className="hidden @[40rem]:inline">Copy</span>
@@ -76,7 +78,7 @@ export function SummaryUpdaterButtonGroup({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" title="Export" className="cursor-pointer">
+          <Button variant="ghost" size="sm" title="Export" className={cn(toolbarButtonClass, 'cursor-pointer')}>
             <Download />
             <span className="hidden @[40rem]:inline">Export</span>
           </Button>
