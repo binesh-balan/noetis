@@ -35,7 +35,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden"
  * backend (500ms polling after a start event; a single sync after a reload). Tick
  * locally from the last known value while recording and not paused; freeze on pause.
  */
-function useLiveSeconds(activeDuration: number | null, ticking: boolean): number {
+export function useLiveSeconds(activeDuration: number | null, ticking: boolean): number {
   const [base, setBase] = useState({ value: activeDuration ?? 0, at: Date.now() });
   const [, setTick] = useState(0);
   useEffect(() => setBase({ value: activeDuration ?? 0, at: Date.now() }), [activeDuration, ticking]);

@@ -8,10 +8,6 @@ const DEFAULT_RATIO = 0.3;
 const MIN_RATIO = 0.3;
 const MAX_RATIO = 0.5;
 
-const TABS = [
-  { value: 'transcript' as const, label: 'Transcript', icon: FileText },
-  { value: 'summary' as const, label: 'Summary', icon: Sparkles },
-];
 
 function readStoredRatio(): number {
   if (typeof window === 'undefined') return DEFAULT_RATIO;
@@ -39,6 +35,9 @@ interface MeetingDetailsSplitViewProps {
   summary: ReactNode;
   activeTab: MeetingDetailsTab;
   onTabChange: (tab: MeetingDetailsTab) => void;
+  /** Tab/region labels; the live Home view uses "Status" for the right pane. */
+  transcriptLabel?: string;
+  summaryLabel?: string;
 }
 
 export function MeetingDetailsSplitView({
@@ -46,7 +45,13 @@ export function MeetingDetailsSplitView({
   summary,
   activeTab,
   onTabChange,
+  transcriptLabel = 'Transcript',
+  summaryLabel = 'Summary',
 }: MeetingDetailsSplitViewProps) {
+  const tabs = [
+    { value: 'transcript' as const, label: transcriptLabel, icon: FileText },
+    { value: 'summary' as const, label: summaryLabel, icon: Sparkles },
+  ];
   const containerRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const [isDesktop, setIsDesktop] = useState(true);
@@ -101,10 +106,10 @@ export function MeetingDetailsSplitView({
   }, [ratio]);
 
   const transcriptPanelProps = isDesktop
-    ? { role: 'region' as const, 'aria-label': 'Transcript', tabIndex: -1 }
+    ? { role: 'region' as const, 'aria-label': transcriptLabel, tabIndex: -1 }
     : {};
   const summaryPanelProps = isDesktop
-    ? { role: 'region' as const, 'aria-label': 'Summary', tabIndex: -1 }
+    ? { role: 'region' as const, 'aria-label': summaryLabel, tabIndex: -1 }
     : {};
 
   return (
@@ -115,7 +120,7 @@ export function MeetingDetailsSplitView({
     >
       <div className="shrink-0 bg-background px-2 md:hidden">
         <TabsList className="relative h-auto w-full justify-center rounded-none border-b border-border bg-transparent p-0">
-          {TABS.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <TabsTrigger
@@ -152,14 +157,14 @@ export function MeetingDetailsSplitView({
           aria-valuenow={Math.round(ratio * 100)}
           aria-valuemin={Math.round(MIN_RATIO * 100)}
           aria-valuemax={Math.round(MAX_RATIO * 100)}
-          aria-valuetext={`Transcript panel ${Math.round(ratio * 100)} percent`}
-          aria-label="Resize transcript and summary"
+          aria-valuetext={`${transcriptLabel} panel ${Math.round(ratio * 100)} percent`}
+          aria-label={`Resize ${transcriptLabel.toLowerCase()} and ${summaryLabel.toLowerCase()}`}
           tabIndex={0}
-          className="group relative z-10 hidden w-2 flex-shrink-0 cursor-col-resize items-stretch justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset md:flex"
+          className="group relative z-10 hidden w-2 flex-shrink-0 cursor-col-resize items-stretch justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:flex"
           onPointerDown={onPointerDown}
           onKeyDown={onSeparatorKeyDown}
         >
-          <div className="h-full w-px bg-accent transition-[width,background-color] duration-150 ease-out group-hover:w-1 group-hover:bg-primary group-active:w-1 group-active:bg-primary" />
+          <div className="h-full w-px bg-border transition-[width,background-color] duration-150 ease-out group-hover:w-1 group-hover:bg-primary group-active:w-1 group-active:bg-primary" />
         </div>
         <TabsContent
           value="summary"

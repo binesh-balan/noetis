@@ -4,47 +4,20 @@ interface StatusOverlaysProps {
   isSaving: boolean;          // Saving transcript to database
 }
 
-// Internal reusable component for individual status overlays
-interface StatusOverlayProps {
-  show: boolean;
-  message: string;
-}
-
-function StatusOverlay({ show, message }: StatusOverlayProps) {
-  if (!show) return null;
-
-  return (
-    <div className="absolute bottom-4 left-0 right-0 z-10">
-      <div className="flex justify-center">
-        <div className="w-2/3 max-w-[750px] flex justify-center">
-          <div className="bg-background rounded-lg shadow-lg px-4 py-2 flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-border"></div>
-            <span className="text-sm text-foreground">{message}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Main exported component - renders multiple status overlays
+// Bottom strip matching RecordingBar, shown while the stopped recording is finalized.
 export function StatusOverlays({
   isProcessing,
   isSaving,
 }: StatusOverlaysProps) {
-  return (
-    <>
-      {/* Processing status overlay - shown after recording stops while finalizing transcription */}
-      <StatusOverlay
-        show={isProcessing}
-        message="Finalizing transcription..."
-      />
+  const message = isSaving ? 'Saving…' : isProcessing ? 'Processing transcript…' : null;
+  if (!message) return null;
 
-      {/* Saving status overlay - shown while saving transcript to database */}
-      <StatusOverlay
-        show={isSaving}
-        message="Saving transcript..."
-      />
-    </>
+  return (
+    <div className="shrink-0 border-t border-border bg-card px-4 py-2" role="status">
+      <div className="mx-auto flex max-w-5xl items-center justify-center gap-2">
+        <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-primary" />
+        <span className="text-sm text-muted-foreground">{message}</span>
+      </div>
+    </div>
   );
 }

@@ -333,8 +333,8 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col space-y-2">
-        <div className="flex items-center space-x-2 bg-background rounded-full shadow-lg px-4 py-2">
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex items-center gap-3">
           {isProcessing && !isParentProcessing ? (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-border"></div>
@@ -389,13 +389,13 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                             handleStartRecording();
                           }}
                           disabled={isStarting || isProcessing || isRecordingDisabled || isValidatingModel || isStartingRecording}
-                          className={`w-12 h-12 flex items-center justify-center ${isStarting || isProcessing || isValidatingModel || isStartingRecording ? 'bg-foreground' : 'bg-destructive hover:bg-destructive/90'
-                            } rounded-full text-primary-foreground transition-colors relative`}
+                          aria-label="Start recording"
+                          className="relative flex h-16 w-16 items-center justify-center rounded-full border border-recording/60 bg-card transition-colors hover:bg-recording/10 disabled:opacity-50"
                         >
                           {isValidatingModel || isStartingRecording ? (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background"></div>
+                            <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-recording"></div>
                           ) : (
-                            <Mic size={20} />
+                            <span className="h-6 w-6 rounded-full bg-recording" />
                           )}
                         </button>
                       </TooltipTrigger>
@@ -419,17 +419,10 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                               }
                             }}
                             disabled={isPausing || isResuming || isStopping}
-                            className={`w-10 h-10 flex items-center justify-center ${isPausing || isResuming || isStopping
-                              ? 'bg-accent border-2 border-border text-muted-foreground'
-                              : 'bg-background border-2 border-border text-muted-foreground hover:border-border hover:bg-muted'
-                              } rounded-full transition-colors relative`}
+                            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm transition-colors hover:bg-accent disabled:opacity-50"
                           >
-                            {isPaused ? <Play size={16} /> : <Pause size={16} />}
-                            {(isPausing || isResuming) && (
-                              <div className="absolute -top-8 text-muted-foreground font-medium text-xs">
-                                {isPausing ? 'Pausing...' : 'Resuming...'}
-                              </div>
-                            )}
+                            {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                            {isPausing ? 'Pausing…' : isResuming ? 'Resuming…' : isPaused ? 'Resume' : 'Pause'}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -445,15 +438,10 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                               handleStopRecording();
                             }}
                             disabled={isStopping || isPausing || isResuming || isStartingRecording}
-                            className={`w-10 h-10 flex items-center justify-center ${isStopping || isPausing || isResuming || isStartingRecording ? 'bg-foreground' : 'bg-destructive hover:bg-destructive/90'
-                              } rounded-full text-primary-foreground transition-colors relative`}
+                            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                           >
-                            <Square size={16} />
-                            {isStopping && (
-                              <div className="absolute -top-8 text-muted-foreground font-medium text-xs">
-                                Stopping...
-                              </div>
-                            )}
+                            <Square className="h-3.5 w-3.5" />
+                            {isStopping ? 'Stopping…' : 'Stop'}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -463,11 +451,12 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                     </>
                   )}
 
-                  <div className="flex items-center space-x-1 mx-4">
+                  {isRecording && (
+                  <div className="flex items-center gap-1" aria-hidden="true">
                     {barHeights.map((height, index) => (
                       <div
                         key={index}
-                        className={`w-1 rounded-full transition-all duration-200 ${isPaused ? 'bg-warning' : 'bg-destructive'
+                        className={`w-1 rounded-full transition-all duration-200 ${isPaused ? 'bg-warning' : 'bg-primary/60'
                           }`}
                         style={{
                           height: isRecording && !isPaused ? height : '4px',
@@ -476,6 +465,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                       />
                     ))}
                   </div>
+                  )}
                 </>
               )}
             </>

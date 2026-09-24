@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useReducer, startTransition, useEffect, useState, memo } from "react";
+import { useCallback, useRef, useReducer, startTransition, useEffect, useState, useMemo, memo } from "react";
+import { speakerColorClass } from "@/lib/speakerColor";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
@@ -65,16 +66,8 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
-// Stable colour per speaker name so the same person reads the same everywhere.
-const SPEAKER_COLORS = ['text-speaker-1', 'text-speaker-2', 'text-speaker-3', 'text-speaker-4', 'text-speaker-5', 'text-speaker-6'];
-function speakerColor(name: string) {
-    let h = 0;
-    for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return SPEAKER_COLORS[h % SPEAKER_COLORS.length];
-}
-
 // Speaker name; click to rename (Enter saves, Escape cancels).
-function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from: string, to: string) => void }) {
+function SpeakerLabel({ speaker, colorClass, onRename }: { speaker: string; colorClass: string; onRename?: (from: string, to: string) => void }) {
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(speaker);
     const commit = () => {
@@ -103,7 +96,7 @@ function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from
     return (
         <button
             type="button"
-            className={`text-xs font-semibold mb-0.5 ${speakerColor(speaker)} ${onRename ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+            className={`text-xs font-semibold mb-0.5 ${colorClass} ${onRename ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
             title={onRename ? 'Rename speaker (use an existing name to merge)' : undefined}
             onClick={() => onRename && setEditing(true)}
         >
@@ -121,6 +114,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isStreaming,
     showConfidence,
     speaker,
+    speakerClass,
     onRenameSpeaker,
 }: {
     id: string;
@@ -130,6 +124,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isStreaming: boolean;
     showConfidence: boolean;
     speaker?: string | null;
+    speakerClass?: string;
     onRenameSpeaker?: (from: string, to: string) => void;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
@@ -150,11 +145,12 @@ const TranscriptSegment = memo(function TranscriptSegment({
                     </TooltipContent>
                 </Tooltip>
                 <div className="flex-1">
-                    {speaker && <SpeakerLabel key={speaker} speaker={speaker} onRename={onRenameSpeaker} />}
+                    {speaker && <SpeakerLabel key={speaker} speaker={speaker} colorClass={speakerClass ?? speakerColorClass(0)} onRename={onRenameSpeaker} />}
                     {isStreaming ? (
-                        <div className="bg-muted border border-border rounded-lg px-3 py-2">
-                            <p className="text-base text-foreground leading-relaxed">{displayText}</p>
-                        </div>
+                        <p className="text-base italic text-muted-foreground leading-relaxed">
+                            {displayText}
+                            <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-primary align-middle" />
+                        </p>
                     ) : (
                         <p className="text-base text-foreground leading-relaxed">{displayText}</p>
                     )}
@@ -200,6 +196,13 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             });
         },
     });
+
+    // Speakers coloured by first-appearance order among loaded segments.
+    const speakerOrder = useMemo(() => {
+        const order = new Map<string, number>();
+        for (const s of segments) if (s.speaker && !order.has(s.speaker)) order.set(s.speaker, order.size);
+        return order;
+    }, [segments]);
 
     // Custom hook for auto-scrolling (supports both virtualized and non-virtualized)
     useAutoScroll({
@@ -352,6 +355,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                         speaker={segment.speaker}
+                                        speakerClass={segment.speaker ? speakerColorClass(speakerOrder.get(segment.speaker) ?? 0) : undefined}
                                         onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </div>
@@ -410,6 +414,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                         speaker={segment.speaker}
+                                        speakerClass={segment.speaker ? speakerColorClass(speakerOrder.get(segment.speaker) ?? 0) : undefined}
                                         onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </motion.div>
