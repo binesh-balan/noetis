@@ -589,12 +589,19 @@ pub(crate) fn line_turns(track: &[Option<usize>], span: (f64, f64), min_turn_sec
 
 /// Words with start times (seconds from the start of the audio passed to Parakeet).
 fn words_from_tokens(r: &crate::parakeet_engine::TimestampedResult) -> Vec<(String, f64)> {
+    words_from_pieces(r.tokens.iter().map(String::as_str).zip(r.timestamps.iter().map(|&t| t as f64)))
+}
+
+/// Joins sub-word pieces into words. A piece starts a new word when it begins with the
+/// SentencePiece marker or a space (ParakeetModel already maps the marker to a space).
+fn words_from_pieces<'a>(pieces: impl Iterator<Item = (&'a str, f64)>) -> Vec<(String, f64)> {
     let mut words: Vec<(String, f64)> = Vec::new();
-    for (tok, &t) in r.tokens.iter().zip(&r.timestamps) {
-        if tok.starts_with('\u{2581}') || words.is_empty() {
-            words.push((tok.trim_start_matches('\u{2581}').to_string(), t as f64));
-        } else if let Some(w) = words.last_mut() {
-            w.0.push_str(tok);
+    for (tok, t) in pieces {
+        let starts_word = tok.starts_with('\u{2581}') || tok.starts_with(' ');
+        let piece = tok.trim_start_matches(['\u{2581}', ' ']);
+        match words.last_mut() {
+            Some(w) if !starts_word => w.0.push_str(piece),
+            _ => words.push((piece.to_string(), t)),
         }
     }
     words.retain(|w| !w.0.is_empty());
@@ -997,6 +1004,10 @@ mod tests {
             .iter().map(|(w, t)| (w.to_string(), *t)).collect();
         assert_eq!(split_words(&words, 0.0, &t), vec!["I'd rather be", "What is"]);
 
+        let pieces = [(" What", 0.2), (" is", 0.4), (" fa", 1.0), ("ther", 1.1), (".", 1.2), ("\u{2581}I'd", 2.0)];
+        assert_eq!(words_from_pieces(pieces.into_iter()), vec![
+            ("What".to_string(), 0.2), ("is".to_string(), 0.4), ("father.".to_string(), 1.0), ("I'd".to_string(), 2.0)]);
+
         let merged = merge_empty_turns(&[(0, 0.0, 2.0), (1, 2.0, 3.0), (0, 3.0, 5.0)], vec!["a".into(), "".into(), "b".into()]);
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].1, "a b");
@@ -1041,6 +1052,39 @@ mod tests {
         // Synthetic voices from one TTS engine are unusually close (two male voices ~0.48), so
         // this checks the model can separate them at all, not the production threshold.
         assert_eq!(cluster(&embs, 0.5), vec![0, 1, 2, 0, 1, 2, 0, 1, 2]);
+    }
+
+    /// Any audio file, no transcript needed: diarize, transcribe with Parakeet (word
+    /// timestamps), and print who said what. Needs DIARIZATION_TEST_DIR (both models),
+    /// DIARIZATION_AUDIO (file) and PARAKEET_DIR (a Parakeet int8 model folder).
+    #[test]
+    #[ignore]
+    fn real_audio_file() {
+        let dir = PathBuf::from(std::env::var("DIARIZATION_TEST_DIR").unwrap());
+        let file = PathBuf::from(std::env::var("DIARIZATION_AUDIO").unwrap());
+        let audio = crate::audio::decoder::decode_audio_file(&file).unwrap().to_whisper_format();
+        let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
+        let mut emb = Embedder::load(&dir.join(EMBEDDING_MODEL.file)).unwrap();
+        let params = test_params();
+        let track = diarize(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
+
+        // Raw frame track as a compact timeline (who is active, 0.1 s resolution).
+        let per = (0.1 / FRAME_SECS) as usize;
+        let timeline: String = track.chunks(per).map(|c| {
+            let mut counts = [0usize; 10];
+            c.iter().flatten().for_each(|&s| counts[s.min(9)] += 1);
+            let best = (0..10).max_by_key(|&i| counts[i]).unwrap();
+            if counts[best] * 2 >= c.len() { char::from(b'1' + best as u8) } else { '.' }
+        }).collect();
+        println!("timeline (0.1 s per char, digit = speaker, . = silence):\n{timeline}");
+
+        let mut asr = crate::parakeet_engine::ParakeetModel::new(std::env::var("PARAKEET_DIR").unwrap(), true).unwrap();
+        let words = words_from_tokens(&asr.transcribe_samples(audio.clone()).unwrap());
+        let turns = line_turns(&track, (0.0, audio.len() as f64 / SAMPLE_RATE), params.min_turn_secs);
+        for ((spk, a, b), text) in turns.iter().zip(split_words(&words, 0.0, &turns)) {
+            println!("[{a:5.1}s - {b:5.1}s] Speaker {}: {text}", spk + 1);
+        }
+        println!("words with times: {}", words.iter().map(|(w, t)| format!("{w}@{t:.1}")).collect::<Vec<_>>().join(" "));
     }
 
     /// Full pipeline on a recorded meeting folder (audio.mp4 + transcripts.json), printing
