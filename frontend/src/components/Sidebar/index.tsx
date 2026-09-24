@@ -16,6 +16,8 @@ import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/formatDuration';
+import { meetingHref } from '@/lib/meetingHref';
+import { useModKeyLabel } from '@/hooks/usePlatform';
 import { Input } from '@/components/ui/input';
 import { About } from '../About';
 
@@ -36,7 +38,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden"
 function useLiveSeconds(activeDuration: number | null, ticking: boolean): number {
   const [base, setBase] = useState({ value: activeDuration ?? 0, at: Date.now() });
   const [, setTick] = useState(0);
-  useEffect(() => setBase({ value: activeDuration ?? 0, at: Date.now() }), [activeDuration]);
+  useEffect(() => setBase({ value: activeDuration ?? 0, at: Date.now() }), [activeDuration, ticking]);
   useEffect(() => {
     if (!ticking) return;
     const id = setInterval(() => setTick((n) => n + 1), 1000);
@@ -86,6 +88,7 @@ const Sidebar: React.FC = () => {
 
   // Get recording state from RecordingStateContext (single source of truth)
   const { isRecording, isPaused, activeDuration } = useRecordingState();
+  const modKey = useModKeyLabel();
   const liveSeconds = useLiveSeconds(activeDuration, isRecording && !isPaused);
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
@@ -232,9 +235,7 @@ const Sidebar: React.FC = () => {
 
   const openMeeting = (item: CurrentMeeting) => {
     setCurrentMeeting({ id: item.id, title: item.title });
-    const basePath = item.id.startsWith('intro-call') ? '/' :
-      item.id.includes('-') ? `/meeting-details?id=${item.id}` : `/notes/${item.id}`;
-    router.push(basePath);
+    router.push(meetingHref(item.id));
   };
 
   // Find matching transcript snippet for a meeting item
@@ -349,7 +350,7 @@ const Sidebar: React.FC = () => {
             <button onClick={() => router.push('/')} className="text-sm font-semibold hover:text-foreground/80">
               Noetis
             </button>
-            <kbd className="rounded border border-border px-1 text-[10px] text-muted-foreground">⌘K</kbd>
+            <kbd className="rounded border border-border px-1 text-[10px] text-muted-foreground">{modKey}K</kbd>
             <div className="ml-auto">{collapseButton}</div>
           </div>
 
@@ -428,7 +429,7 @@ const Sidebar: React.FC = () => {
             >
               <Settings className="h-4 w-4" />
               <span>Settings</span>
-              <kbd className="ml-auto rounded border border-border px-1 text-[10px] text-muted-foreground">⌘,</kbd>
+              <kbd className="ml-auto rounded border border-border px-1 text-[10px] text-muted-foreground">{modKey},</kbd>
             </button>
             <Dialog aria-describedby={undefined}>
               <DialogTrigger asChild>

@@ -10,6 +10,8 @@ export function useHotkeys(map: Record<string, (e: KeyboardEvent) => void>) {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       const key = e.key.toLowerCase();
+      // Always block the webview's own reload shortcut, even while typing.
+      if (key === 'r') e.preventDefault();
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       if (typing && key !== 'k') return;

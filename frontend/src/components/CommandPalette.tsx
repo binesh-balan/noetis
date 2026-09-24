@@ -7,6 +7,8 @@ import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useTheme } from '@/hooks/useTheme';
+import { useModKeyLabel } from '@/hooks/usePlatform';
+import { meetingHref } from '@/lib/meetingHref';
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const router = useRouter();
@@ -15,6 +17,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
   const { setTheme } = useTheme();
+  const modKey = useModKeyLabel();
   const run = (fn: () => void) => () => { onOpenChange(false); fn(); };
 
   return (
@@ -24,13 +27,13 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <CommandEmpty>No results.</CommandEmpty>
         <CommandGroup heading="Actions">
           <CommandItem onSelect={run(() => (isRecording ? router.push('/') : handleRecordingToggle()))}>
-            <Mic /> {isRecording ? 'Go to recording' : 'New recording'} <CommandShortcut>⌘R</CommandShortcut>
+            <Mic /> {isRecording ? 'Go to recording' : 'New recording'} <CommandShortcut>{modKey}R</CommandShortcut>
           </CommandItem>
           {betaFeatures.importAndRetranscribe && (
             <CommandItem onSelect={run(() => openImportDialog())}><Upload /> Import audio</CommandItem>
           )}
           <CommandItem onSelect={run(() => router.push('/settings'))}>
-            <Settings /> Settings <CommandShortcut>⌘,</CommandShortcut>
+            <Settings /> Settings <CommandShortcut>{modKey},</CommandShortcut>
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Theme">
@@ -46,7 +49,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               onSelect={run(() => {
                 // Same as a sidebar row click: keeps the current-meeting highlight in sync.
                 setCurrentMeeting({ id: m.id, title: m.title });
-                router.push(`/meeting-details?id=${m.id}`);
+                router.push(meetingHref(m.id));
               })}
             >
               <FileText /> {m.title}

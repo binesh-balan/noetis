@@ -84,3 +84,13 @@ export function useIsLinux(): boolean {
   const currentPlatform = usePlatform();
   return currentPlatform === 'linux';
 }
+
+/** '⌘' on macOS, 'Ctrl+' elsewhere — for compact shortcut hints (e.g. `${modKeyLabel(p)}K`). */
+export function modKeyLabel(platform: Platform): string {
+  return platform === 'macos' ? '⌘' : 'Ctrl+';
+}
+
+/** Hook form of {@link modKeyLabel} for use directly in components. */
+export function useModKeyLabel(): string {
+  return modKeyLabel(usePlatform());
+}
