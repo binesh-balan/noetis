@@ -90,10 +90,7 @@ export function SetupOverviewStep() {
 
         {/* CTA Section */}
         <div className="w-full max-w-xs space-y-4">
-          <Button
-            onClick={handleContinue}
-            className="w-full h-11 bg-foreground hover:bg-foreground/90 text-primary-foreground"
-          >
+          <Button onClick={handleContinue} className="w-full h-11">
             Let's Go
           </Button>
           <div className="text-center">

@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Mic, Sparkles, Check, Loader2, Download } from 'lucide-react';
+import { Mic, Sparkles, Check, Loader2, Download, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
@@ -441,12 +442,7 @@ export function DownloadProgressStep() {
       {/* Progress Bar */}
       {(state.status === 'downloading' || state.status === 'completed') && (
         <div className="space-y-2">
-          <div className="w-full h-2 bg-accent rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
-              style={{ width: `${state.progress}%` }}
-            />
-          </div>
+          <Progress value={state.progress} className="h-2" />
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
               {state.downloadedMb.toFixed(1)} {sizeUnit} / {state.totalMb.toFixed(1)} {sizeUnit}
@@ -472,16 +468,14 @@ export function DownloadProgressStep() {
           </p>
           {state.error && <p className="text-xs text-destructive mt-1">{state.error}</p>}
           {(title === 'Transcription Engine' || title === 'Summary Engine') && (
-            <button
+            <Button
               onClick={title === 'Transcription Engine' ? handleRetryDownload : handleRetrySummaryDownload}
-              className="mt-3 w-full h-9 px-4 bg-foreground hover:bg-foreground/90 text-primary-foreground text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              className="mt-3 w-full"
+              size="sm"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <RefreshCw className="w-4 h-4" />
               Try Again
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -542,7 +536,7 @@ export function DownloadProgressStep() {
           <Button
             onClick={handleContinue}
             disabled={!parakeetDownloaded || isCompleting}
-            className="w-full h-11 bg-foreground hover:bg-foreground/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full h-11"
           >
             {(isCompleting || !parakeetDownloaded) ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

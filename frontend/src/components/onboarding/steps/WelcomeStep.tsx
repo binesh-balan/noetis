@@ -52,10 +52,7 @@ export function WelcomeStep() {
 
         {/* CTA Section */}
         <div className="w-full max-w-xs space-y-3">
-          <Button
-            onClick={goNext}
-            className="w-full h-11 bg-foreground hover:bg-foreground/90 text-primary-foreground"
-          >
+          <Button onClick={goNext} className="w-full h-11">
             Get Started
           </Button>
           <p className="text-xs text-center text-muted-foreground">Takes less than 3 minutes</p>
