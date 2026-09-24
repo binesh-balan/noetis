@@ -4,7 +4,10 @@ import './globals.css'
 import { Inter } from 'next/font/google'
 import { THEME_BOOT_SCRIPT } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
-import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
+import { SidebarProvider, useSidebar } from '@/components/Sidebar/SidebarProvider'
+import { CommandPalette } from '@/components/CommandPalette'
+import { useHotkeys } from '@/hooks/useHotkeys'
+import { useRouter } from 'next/navigation'
 import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
@@ -13,7 +16,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { RecordingStateProvider, useRecordingState } from '@/contexts/RecordingStateContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
@@ -55,6 +58,27 @@ function ConditionalImportDialog({
       onOpenChange={handleImportDialogClose}
       preselectedFile={importFilePath}
     />
+  );
+}
+
+// Module-level for the same reason as ConditionalImportDialog; must sit inside the providers.
+function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isRecording } = useRecordingState();
+  const { handleRecordingToggle, toggleCollapse } = useSidebar();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useHotkeys({
+    'mod+k': () => setPaletteOpen((o) => !o),
+    'mod+r': () => (isRecording ? router.push('/') : handleRecordingToggle()),
+    'mod+\\': () => toggleCollapse(),
+    'mod+,': () => router.push('/settings'),
+  });
+  return (
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <Sidebar />
+      <MainContent>{children}</MainContent>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
   );
 }
 
@@ -251,10 +275,7 @@ export default function RootLayout({
                               {showOnboarding ? (
                                 <OnboardingFlow onComplete={handleOnboardingComplete} />
                               ) : (
-                                <div className="flex">
-                                  <Sidebar />
-                                  <MainContent>{children}</MainContent>
-                                </div>
+                                <AppShell>{children}</AppShell>
                               )}
                               {/* Import audio overlay and dialog */}
                               <ImportDropOverlay visible={showDropOverlay} />

@@ -72,7 +72,7 @@ export default function SettingsPage() {
   }, [activeTab, tabs]);
 
   return (
-    <div className="h-screen bg-muted flex flex-col">
+    <div className="h-full bg-muted flex flex-col">
       {/* Fixed Header */}
       <div className="sticky top-0 z-10 bg-muted border-b border-border">
         <div className="max-w-6xl mx-auto px-8 py-6">
