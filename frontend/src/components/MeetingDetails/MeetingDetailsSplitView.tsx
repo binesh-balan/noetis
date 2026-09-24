@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { FileText, Sparkles } from 'lucide-react';
+import { FileText, Sparkles, type LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const STORAGE_KEY = 'noetis.meetingDetails.transcriptPaneRatio';
 const DEFAULT_RATIO = 0.3;
@@ -38,6 +38,8 @@ interface MeetingDetailsSplitViewProps {
   /** Tab/region labels; the live Home view uses "Status" for the right pane. */
   transcriptLabel?: string;
   summaryLabel?: string;
+  /** Icon for the summary/status tab; the live Home view passes Activity instead of Sparkles. */
+  summaryIcon?: LucideIcon;
 }
 
 export function MeetingDetailsSplitView({
@@ -47,10 +49,11 @@ export function MeetingDetailsSplitView({
   onTabChange,
   transcriptLabel = 'Transcript',
   summaryLabel = 'Summary',
+  summaryIcon = Sparkles,
 }: MeetingDetailsSplitViewProps) {
   const tabs = [
     { value: 'transcript' as const, label: transcriptLabel, icon: FileText },
-    { value: 'summary' as const, label: summaryLabel, icon: Sparkles },
+    { value: 'summary' as const, label: summaryLabel, icon: summaryIcon },
   ];
   const containerRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);

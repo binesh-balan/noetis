@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/formatDuration';
 import { meetingHref } from '@/lib/meetingHref';
 import { useModKeyLabel } from '@/hooks/usePlatform';
+import { useLiveSeconds } from '@/hooks/useLiveSeconds';
 import { Input } from '@/components/ui/input';
 import { About } from '../About';
 
@@ -29,23 +30,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { VisuallyHidden } from "@/components/ui/visually-hidden"
-
-/**
- * `activeDuration` (seconds) only changes when RecordingStateContext syncs with the
- * backend (500ms polling after a start event; a single sync after a reload). Tick
- * locally from the last known value while recording and not paused; freeze on pause.
- */
-export function useLiveSeconds(activeDuration: number | null, ticking: boolean): number {
-  const [base, setBase] = useState({ value: activeDuration ?? 0, at: Date.now() });
-  const [, setTick] = useState(0);
-  useEffect(() => setBase({ value: activeDuration ?? 0, at: Date.now() }), [activeDuration, ticking]);
-  useEffect(() => {
-    if (!ticking) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [ticking]);
-  return ticking ? base.value + (Date.now() - base.at) / 1000 : base.value;
-}
 
 // Collapsed-strip icon button with a right-side tooltip.
 function RailButton({ label, onClick, active, children }: {

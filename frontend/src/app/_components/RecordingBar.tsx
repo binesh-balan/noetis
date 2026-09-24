@@ -1,6 +1,6 @@
 'use client';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
-import { useLiveSeconds } from '@/components/Sidebar';
+import { useLiveSeconds } from '@/hooks/useLiveSeconds';
 import { formatDuration } from '@/lib/formatDuration';
 
 export function RecordingBar({ children }: { children: React.ReactNode }) {

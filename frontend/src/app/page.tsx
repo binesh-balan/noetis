@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Activity } from 'lucide-react';
 import { RecordingControls } from '@/components/RecordingControls';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { usePermissionCheck } from '@/hooks/usePermissionCheck';
@@ -245,6 +246,7 @@ export default function Home() {
             activeTab={liveTab}
             onTabChange={setLiveTab}
             summaryLabel="Status"
+            summaryIcon={Activity}
           />
         ) : (
           <HomeIdle startControl={controls} />
@@ -256,7 +258,7 @@ export default function Home() {
         isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
         isSaving={status === RecordingStatus.SAVING}
       />
-      {sessionActive && controls && <RecordingBar>{controls}</RecordingBar>}
+      {(recordingState.isRecording || status === RecordingStatus.STOPPING) && controls && <RecordingBar>{controls}</RecordingBar>}
     </div>
   );
 }
