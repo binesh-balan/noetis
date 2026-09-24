@@ -141,7 +141,7 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
             <button
               onClick={handleBrowse}
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary disabled:bg-foreground disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-foreground disabled:cursor-not-allowed transition-colors"
             >
               {importState === 'selecting' || importState === 'detecting' ? (
                 <>
@@ -187,7 +187,7 @@ export function LegacyDatabaseImport({ isOpen, onComplete }: LegacyDatabaseImpor
             <button
               onClick={handleImport}
               disabled={!canImport || isLoading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-success text-primary-foreground rounded-lg hover:bg-success disabled:bg-accent disabled:cursor-not-allowed transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-success text-success-foreground rounded-lg hover:bg-success/90 disabled:bg-accent disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
             >
               {importState === 'importing' ? (
                 <>

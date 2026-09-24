@@ -476,7 +476,7 @@ const Sidebar: React.FC = () => {
               <button
                 onClick={handleRecordingToggle}
                 disabled={isRecording}
-                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive'} rounded-full transition-colors duration-150 shadow-sm`}
+                className={`p-2 ${isRecording ? 'bg-destructive cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-full transition-colors duration-150 shadow-sm`}
               >
                 {isRecording ? (
                   <Square className="w-5 h-5 text-primary-foreground" />
@@ -495,7 +495,7 @@ const Sidebar: React.FC = () => {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => openImportDialog()}
-                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-primary/10 bg-primary/10"
+                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-primary/20 bg-primary/10"
                 >
                   <Upload className="w-5 h-5 text-primary" />
                 </button>
@@ -777,7 +777,7 @@ const Sidebar: React.FC = () => {
             <button
               onClick={handleRecordingToggle}
               disabled={isRecording}
-              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground ${isRecording ? 'bg-destructive/20 cursor-not-allowed' : 'bg-destructive hover:bg-destructive'} rounded-lg transition-colors shadow-sm`}
+              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-primary-foreground ${isRecording ? 'bg-destructive/20 cursor-not-allowed' : 'bg-destructive hover:bg-destructive/90'} rounded-lg transition-colors shadow-sm`}
             >
               {isRecording ? (
                 <>
@@ -804,7 +804,7 @@ const Sidebar: React.FC = () => {
 
             <button
               onClick={() => router.push('/settings')}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-foreground bg-accent hover:bg-accent rounded-lg transition-colors shadow-sm"
+              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-foreground bg-accent hover:bg-accent/70 rounded-lg transition-colors shadow-sm"
             >
               <Settings className="w-4 h-4 mr-2" />
               <span>Settings</span>
@@ -868,7 +868,7 @@ const Sidebar: React.FC = () => {
             </button>
             <button
               onClick={handleEditConfirm}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
             >
               Save
             </button>

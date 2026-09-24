@@ -1181,8 +1181,8 @@ export function ModelSettingsModal({
                   </Button>
                 </div>
                 {ollamaEndpointChanged && !error && (
-                  <Alert className="mt-3 border-border bg-accent">
-                    <AlertDescription className="text-foreground">
+                  <Alert className="mt-3 border-warning/40 bg-warning/10">
+                    <AlertDescription className="text-warning">
                       Endpoint changed. Please click "Fetch Models" to load models from the new endpoint before saving.
                     </AlertDescription>
                   </Alert>
@@ -1225,8 +1225,8 @@ export function ModelSettingsModal({
                 {ollamaNotInstalled ? (
                   /* Show Ollama download link when not installed */
                   <div className="space-y-4">
-                    <Alert className="border-border bg-accent">
-                      <AlertDescription className="text-foreground">
+                    <Alert className="border-warning/40 bg-warning/10">
+                      <AlertDescription className="text-warning">
                         Ollama is not installed or not running. Please download and install Ollama to use local models.
                       </AlertDescription>
                     </Alert>
@@ -1234,7 +1234,7 @@ export function ModelSettingsModal({
                       variant="default"
                       size="sm"
                       onClick={() => invoke('open_external_url', { url: 'https://ollama.com/download' })}
-                      className="w-full bg-primary hover:bg-primary"
+                      className="w-full bg-primary hover:bg-primary/90"
                     >
                       <ExternalLink className="mr-2 h-4 w-4" />
                       Download Ollama
@@ -1395,7 +1395,7 @@ export function ModelSettingsModal({
         <Button
           className={cn(
             'px-4 text-sm font-medium text-primary-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
-            isDoneDisabled ? 'bg-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary'
+            isDoneDisabled ? 'bg-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'
           )}
           onClick={handleSave}
           disabled={isDoneDisabled}

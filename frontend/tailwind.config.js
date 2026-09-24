@@ -19,7 +19,14 @@ module.exports = {
   			ring: 'hsl(var(--ring) / <alpha-value>)',
   			sidebar: 'hsl(var(--sidebar) / <alpha-value>)',
   			recording: 'hsl(var(--recording) / <alpha-value>)',
-  			success: 'hsl(var(--success) / <alpha-value>)',
+  			success: {
+  				DEFAULT: 'hsl(var(--success) / <alpha-value>)',
+  				foreground: 'hsl(var(--success-foreground) / <alpha-value>)'
+  			},
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning) / <alpha-value>)',
+  				foreground: 'hsl(var(--warning-foreground) / <alpha-value>)'
+  			},
   			primary: {
   				DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
   				foreground: 'hsl(var(--primary-foreground) / <alpha-value>)'

@@ -158,7 +158,7 @@ export function SettingsModals({
           <div className="border-t p-6 flex justify-end">
             <button
               onClick={() => onClose('modelSettings')}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Done
             </button>
@@ -199,7 +199,7 @@ export function SettingsModals({
                 });
                 onClose('deviceSettings');
               }}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Done
             </button>
@@ -236,7 +236,7 @@ export function SettingsModals({
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => onClose('languageSettings')}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               Done
             </button>
@@ -312,7 +312,7 @@ export function SettingsModals({
             {messages.errorAlert}
             <button
               onClick={() => onClose('errorAlert')}
-              className="ml-2 text-destructive hover:text-destructive underline"
+              className="ml-2 text-destructive underline"
             >
               Dismiss
             </button>
@@ -324,13 +324,13 @@ export function SettingsModals({
     {/* Chunk Drop Warning Modal */}
     {modals.chunkDropWarning && (
       <div className="fixed inset-0 bg-foreground bg-opacity-50 flex items-center justify-center z-50">
-        <Alert className="max-w-lg mx-4 border-border bg-background shadow-xl">
-          <AlertTitle className="text-foreground">Transcription Performance Warning</AlertTitle>
-          <AlertDescription className="text-muted-foreground">
+        <Alert className="max-w-lg mx-4 border-warning/40 bg-background shadow-xl">
+          <AlertTitle className="text-warning">Transcription Performance Warning</AlertTitle>
+          <AlertDescription className="text-warning">
             {messages.chunkDropWarning}
             <button
               onClick={() => onClose('chunkDropWarning')}
-              className="ml-2 text-muted-foreground hover:text-foreground underline"
+              className="ml-2 text-warning underline"
             >
               Dismiss
             </button>

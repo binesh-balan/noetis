@@ -17,7 +17,7 @@ const Info = React.forwardRef<HTMLButtonElement, InfoProps>(({ isCollapsed }, re
           className={`flex items-center justify-center mb-2 cursor-pointer border-none transition-colors ${
             isCollapsed 
               ? "bg-transparent p-2 hover:bg-muted rounded-lg" 
-              : "w-full px-3 py-1.5 mt-1 text-sm font-medium text-foreground bg-accent hover:bg-accent rounded-lg shadow-sm"
+              : "w-full px-3 py-1.5 mt-1 text-sm font-medium text-foreground bg-accent hover:bg-accent/70 rounded-lg shadow-sm"
           }`}
           title="About Noetis"
         >

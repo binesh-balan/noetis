@@ -98,6 +98,9 @@
     --destructive-foreground: 0 0% 100%;
     --recording: 358 64.9% 48%;
     --success: 153 66.9% 28.4%;
+    --success-foreground: 0 0% 100%;
+    --warning: 30 100% 32%;
+    --warning-foreground: 0 0% 100%;
     --border: 228 9.8% 90%;
     --input: 226 6.1% 58.2%;
     --ring: 240 60% 59.8%;
@@ -136,6 +139,9 @@
     --destructive-foreground: 225 12.5% 6.3%;
     --recording: 358 85.8% 64.1%;
     --success: 160 58.6% 56.5%;
+    --success-foreground: 225 12.5% 6.3%;
+    --warning: 37 91.3% 55.1%;
+    --warning-foreground: 225 12.5% 6.3%;
     --border: 225 10.5% 14.9%;
     --input: 227 7.1% 38.8%;
     --ring: 239 87.1% 75.7%;

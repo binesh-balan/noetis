@@ -18,8 +18,8 @@ export function BetaSettings() {
   return (
     <div className="space-y-6">
       {/* Yellow Warning Banner */}
-      <div className="flex items-start gap-3 p-4 bg-accent border border-border rounded-lg">
-        <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/40 rounded-lg">
+        <AlertCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
         <div className="text-sm text-foreground">
           <p className="font-medium">Beta Features</p>
           <p className="mt-1">

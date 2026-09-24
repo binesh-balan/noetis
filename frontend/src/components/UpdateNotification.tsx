@@ -34,7 +34,7 @@ export function showUpdateNotification(updateInfo: UpdateInfo, onUpdateClick?: (
           e.stopPropagation();
           handleClick();
         }}
-        className="text-sm font-medium text-primary hover:text-primary underline"
+        className="text-sm font-medium text-primary underline"
       >
         View Details
       </button>

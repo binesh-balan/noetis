@@ -32,7 +32,7 @@ export function AudioLevelMeter({
   // Color coding based on level
   const getLevelColor = (level: number) => {
     if (level < 0.3) return 'bg-success';
-    if (level < 0.7) return 'bg-destructive';
+    if (level < 0.7) return 'bg-warning';
     return 'bg-destructive';
   };
 
@@ -125,7 +125,7 @@ export function CompactAudioLevelMeter({
 
   const getLevelColor = (level: number) => {
     if (level < 0.3) return 'bg-success';
-    if (level < 0.7) return 'bg-destructive';
+    if (level < 0.7) return 'bg-warning';
     return 'bg-destructive';
   };
 

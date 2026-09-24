@@ -357,7 +357,7 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
           {isRecording ? (
             <>
               <div className="flex items-center justify-center mb-3">
-                <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-destructive' : 'bg-primary animate-pulse'}`}></div>
+                <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-warning' : 'bg-primary animate-pulse'}`}></div>
               </div>
               <p className="text-sm text-muted-foreground">
                 {isPaused ? 'Recording paused' : 'Listening for speech...'}

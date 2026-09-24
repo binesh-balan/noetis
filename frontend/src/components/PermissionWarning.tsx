@@ -55,9 +55,9 @@ export function PermissionWarning({
     <div className="max-w-md mb-4 space-y-3">
       {/* Combined Permission Warning - Show when either permission is missing */}
       {(!hasMicrophone || !hasSystemAudio) && (
-        <Alert variant="destructive" className="border-border bg-accent">
-          <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-          <AlertTitle className="text-foreground font-semibold">
+        <Alert className="border-warning/40 bg-warning/10">
+          <AlertTriangle className="h-5 w-5 text-warning" />
+          <AlertTitle className="text-warning font-semibold">
             <div className="flex items-center gap-2">
               {!hasMicrophone && <Mic className="h-4 w-4" />}
               {!hasSystemAudio && <Speaker className="h-4 w-4" />}
@@ -69,7 +69,7 @@ export function PermissionWarning({
             {isMacOS && !hasMicrophone && (
               <button
                 onClick={openMicrophoneSettings}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-destructive hover:bg-destructive rounded-md transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-warning-foreground bg-warning hover:bg-warning/90 rounded-md transition-colors"
               >
                 <Mic className="h-4 w-4" />
                 Open Microphone Settings
@@ -78,7 +78,7 @@ export function PermissionWarning({
             {isMacOS && !hasSystemAudio && (
               <button
                 onClick={openScreenRecordingSettings}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary rounded-md transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
               >
                 <Speaker className="h-4 w-4" />
                 Open Screen Recording Settings
@@ -93,7 +93,7 @@ export function PermissionWarning({
               Recheck
             </button>
           </div>
-          <AlertDescription className="text-foreground mt-2">
+          <AlertDescription className="text-warning mt-2">
             {/* Microphone Warning */}
             {!hasMicrophone && (
               <>

@@ -447,7 +447,7 @@ export function ImportAudioDialog({
               </Button>
               <Button
                 onClick={handleStartImport}
-                className="bg-primary hover:bg-primary"
+                className="bg-primary hover:bg-primary/90"
                 disabled={!fileInfo}
               >
                 <Upload className="h-4 w-4 mr-2" />

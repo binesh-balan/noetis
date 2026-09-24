@@ -96,7 +96,7 @@ export function ChunkProgressDisplay({
             Processing Progress
           </h3>
           {isPaused && (
-            <span className="bg-accent text-foreground px-2 py-1 rounded-full text-xs font-medium">
+            <span className="bg-warning/10 text-warning px-2 py-1 rounded-full text-xs font-medium">
               Paused
             </span>
           )}
@@ -106,7 +106,7 @@ export function ChunkProgressDisplay({
           {!isPaused ? (
             <button
               onClick={onPause}
-              className="bg-destructive hover:bg-destructive text-primary-foreground px-3 py-1 rounded text-sm transition-colors"
+              className="bg-warning hover:bg-warning/90 text-warning-foreground px-3 py-1 rounded text-sm transition-colors"
               disabled={progress.processing_chunks === 0 && progress.completed_chunks === progress.total_chunks}
             >
               Pause
@@ -114,7 +114,7 @@ export function ChunkProgressDisplay({
           ) : (
             <button
               onClick={onResume}
-              className="bg-success hover:bg-success text-primary-foreground px-3 py-1 rounded text-sm transition-colors"
+              className="bg-success hover:bg-success/90 text-success-foreground px-3 py-1 rounded text-sm transition-colors"
             >
               Resume
             </button>
@@ -122,7 +122,7 @@ export function ChunkProgressDisplay({
 
           <button
             onClick={onCancel}
-            className="bg-destructive hover:bg-destructive text-primary-foreground px-3 py-1 rounded text-sm transition-colors"
+            className="bg-destructive hover:bg-destructive/90 text-primary-foreground px-3 py-1 rounded text-sm transition-colors"
           >
             Cancel
           </button>

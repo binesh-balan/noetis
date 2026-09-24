@@ -211,7 +211,7 @@ export function LanguageSelection({
             <strong>Current:</strong> {selectedLanguageName}
           </p>
           {selectedLanguage === 'auto' && (
-            <div className="p-2 bg-accent border border-border rounded text-foreground">
+            <div className="p-2 bg-warning/10 border border-warning/40 rounded text-warning">
               <p className="font-medium">⚠️ Auto Detect may produce incorrect results</p>
               <p className="mt-1">For best accuracy, select your specific language (e.g., English, Spanish, etc.)</p>
             </div>

@@ -11,7 +11,7 @@ export function StatusIndicator({ status, size = 'md' }: StatusIndicatorProps) {
 
   const statusColors = {
     idle: 'bg-accent',
-    checking: 'bg-destructive animate-pulse',
+    checking: 'bg-warning animate-pulse',
     success: 'bg-success',
     error: 'bg-destructive',
   };

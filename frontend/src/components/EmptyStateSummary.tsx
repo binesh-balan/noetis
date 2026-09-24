@@ -67,7 +67,7 @@ export function EmptyStateSummary({
       </TooltipProvider>
 
       {!hasModel && (
-        <p className="text-xs text-muted-foreground mt-3">
+        <p className="text-xs text-warning mt-3">
           Please select a model in Settings first
         </p>
       )}

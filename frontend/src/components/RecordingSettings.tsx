@@ -215,8 +215,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
 
       {/* Info when auto_save is disabled */}
       {!preferences.auto_save && (
-        <div className="p-4 border rounded-lg bg-accent">
-          <div className="text-sm text-foreground">
+        <div className="p-4 border border-warning/40 rounded-lg bg-warning/10">
+          <div className="text-sm text-warning">
             Audio recording is disabled. Enable "Save Audio Recordings" to automatically save your meeting audio.
           </div>
         </div>
@@ -248,7 +248,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
             <p
               role="status"
               aria-live="polite"
-              className="text-sm text-muted-foreground bg-accent border border-border rounded-md p-2 mb-4"
+              className="text-sm text-warning bg-warning/10 border border-warning/40 rounded-md p-2 mb-4"
             >
               Device selection is locked while a recording is in progress. Connecting a new device mid-recording will not switch to it. Stop the current meeting to change devices.
             </p>

@@ -159,7 +159,7 @@ export function TranscriptRecovery({
                         </span>
                       ) : (
                         <span title="No audio">
-                          <AlertCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <AlertCircle className="w-4 h-4 text-warning flex-shrink-0" />
                         </span>
                       )}
                     </div>
@@ -192,7 +192,7 @@ export function TranscriptRecovery({
                           Audio available
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-muted-foreground">
+                        <span className="flex items-center gap-1 text-warning">
                           <AlertCircle className="w-4 h-4" />
                           No audio
                         </span>

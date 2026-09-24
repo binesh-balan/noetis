@@ -75,7 +75,7 @@ export const ComplianceNotification: React.FC<ComplianceNotificationProps> = ({
         {/* Header with close button */}
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <AlertTriangle className="h-3 w-3 text-warning flex-shrink-0" />
             <h3 className="text-xs font-semibold text-foreground">
               Recording Notice
             </h3>
@@ -93,8 +93,8 @@ export const ComplianceNotification: React.FC<ComplianceNotificationProps> = ({
           <p className="text-xs text-muted-foreground mb-1">
             Inform participants about recording.
           </p>
-          <div className="bg-accent border border-border rounded p-1">
-            <p className="text-xs text-foreground font-medium">
+          <div className="bg-warning/10 border border-warning/40 rounded p-1">
+            <p className="text-xs text-warning font-medium">
               US compliance required
             </p>
           </div>
@@ -113,7 +113,7 @@ export const ComplianceNotification: React.FC<ComplianceNotificationProps> = ({
           <Button
             size="sm"
             onClick={handleAcknowledge}
-            className="text-xs px-2 py-0.5 h-6 bg-success hover:bg-success flex-1"
+            className="text-xs px-2 py-0.5 h-6 bg-success text-success-foreground hover:bg-success/90 flex-1"
           >
             <CheckCircle className="h-2 w-2 mr-1" />
             Done

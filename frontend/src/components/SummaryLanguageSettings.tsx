@@ -59,7 +59,7 @@ export function SummaryLanguageSettings() {
                 type="button"
                 aria-label={`Remove ${labelForCode(code)}`}
                 onClick={() => removeRecent(code)}
-                className={`pr-2.5 pl-0.5 py-1 leading-none ${isPinned ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`pr-2.5 pl-0.5 py-1 leading-none ${isPinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 ×
               </button>

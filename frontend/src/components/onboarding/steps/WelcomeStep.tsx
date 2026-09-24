@@ -54,7 +54,7 @@ export function WelcomeStep() {
         <div className="w-full max-w-xs space-y-3">
           <Button
             onClick={goNext}
-            className="w-full h-11 bg-foreground hover:bg-foreground text-primary-foreground"
+            className="w-full h-11 bg-foreground hover:bg-foreground/90 text-primary-foreground"
           >
             Get Started
           </Button>

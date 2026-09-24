@@ -647,7 +647,7 @@ function ModelCard({
                 <span className={`px-2 py-0.5 rounded-full text-xs ${getModelPerformanceBadge(model.name).color === 'green'
                   ? 'bg-success/10 text-success'
                   : getModelPerformanceBadge(model.name).color === 'orange'
-                    ? 'bg-accent text-muted-foreground'
+                    ? 'bg-warning/10 text-warning'
                     : 'bg-muted text-foreground'
                   }`}>
                   {getModelPerformanceBadge(model.name).label}
@@ -709,7 +709,7 @@ function ModelCard({
                   e.stopPropagation();
                   onDownload();
                 }}
-                className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary transition-colors"
+                className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
               >
                 Download
               </button>
@@ -721,7 +721,7 @@ function ModelCard({
                   e.stopPropagation();
                   onDownload();
                 }}
-                className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive transition-colors"
+                className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
               >
                 Retry
               </button>
@@ -734,7 +734,7 @@ function ModelCard({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive transition-colors"
+                  className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
                 >
                   Delete
                 </button>
@@ -743,7 +743,7 @@ function ModelCard({
                     e.stopPropagation();
                     onDownload();
                   }}
-                  className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary transition-colors"
+                  className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
                 >
                   Re-download
                 </button>

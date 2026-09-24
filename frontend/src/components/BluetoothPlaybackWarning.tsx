@@ -64,14 +64,14 @@ export function BluetoothPlaybackWarning({
 
   return (
     <Alert
-      className="mb-4 border-border bg-accent text-foreground"
+      className="mb-4 border-warning/40 bg-warning/10 text-foreground"
       role="alert"
       aria-live="polite"
     >
-      <Speaker className="h-4 w-4 text-muted-foreground" />
+      <Speaker className="h-4 w-4 text-warning" />
       <div className="flex items-start justify-between w-full">
         <div className="flex-1">
-          <AlertTitle className="text-foreground font-semibold">
+          <AlertTitle className="text-warning font-semibold">
             Bluetooth Playback Detected
           </AlertTitle>
           <AlertDescription className="text-foreground mt-1">
