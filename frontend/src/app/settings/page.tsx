@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useManagedPolicy } from '@/hooks/useManagedPolicy';
-import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -13,6 +13,7 @@ import { OrgAccountSettings } from '@/components/OrgAccountSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { BetaSettings } from '@/components/BetaSettings';
+import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { useConfig } from '@/contexts/ConfigContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -23,6 +24,7 @@ const TABS = [
   { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
   { value: 'summaryModels', label: 'Summary', icon: SparkleIcon },
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { value: 'appearance', label: 'Appearance', icon: Palette },
   { value: 'beta', label: 'Beta', icon: FlaskConical }
 ] as const;
 
@@ -134,6 +136,9 @@ export default function SettingsPage() {
             </TabsContent>
             <TabsContent value="templates" className="mt-6">
               <TemplateSettings />
+            </TabsContent>
+            <TabsContent value="appearance" className="mt-6">
+              <AppearanceSettings />
             </TabsContent>
             <TabsContent value="beta" className="mt-6">
               <BetaSettings />

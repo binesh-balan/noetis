@@ -1,7 +1,8 @@
 'use client'
 
 import './globals.css'
-import { Source_Sans_3 } from 'next/font/google'
+import { Inter } from 'next/font/google'
+import { THEME_BOOT_SCRIPT } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
 import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
 import MainContent from '@/components/MainContent'
@@ -27,11 +28,7 @@ import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
 
 
-const sourceSans3 = Source_Sans_3({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-source-sans-3',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 // Module-level component — stable reference across RootLayout re-renders.
 // Defined here (not inside RootLayout) so React never sees a new function type
@@ -231,8 +228,11 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={`${sourceSans3.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
         <AnalyticsProvider>
           <RecordingStateProvider>
             <TranscriptProvider>
@@ -276,7 +276,7 @@ export default function RootLayout({
           </RecordingStateProvider>
         </AnalyticsProvider>
 
-        <Toaster position="bottom-center" richColors closeButton />
+        <Toaster position="bottom-center" richColors closeButton theme="system" />
       </body>
     </html>
   )
