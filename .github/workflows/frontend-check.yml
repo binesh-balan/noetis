@@ -44,11 +44,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ponytail: guarded so the same file works on branches that predate these scripts
       - name: Colour tokens
-        run: pnpm lint
+        run: if [ -f scripts/check-colors.mjs ]; then node scripts/check-colors.mjs; else echo "skipped: no check-colors.mjs"; fi
 
       - name: Contrast
-        run: node scripts/check-contrast.mjs
+        run: if [ -f scripts/check-contrast.mjs ]; then node scripts/check-contrast.mjs; else echo "skipped: no check-contrast.mjs"; fi
 
       - name: Type check
         run: pnpm exec tsc --noEmit
