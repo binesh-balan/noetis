@@ -5,21 +5,24 @@
 
 .DESCRIPTION
   Run as SYSTEM or an administrator (e.g. an Intune Win32 app / platform script, 64-bit).
-  - The summary API key is encrypted with machine-scope DPAPI on this device, so
-    policy.json never contains it in clear text and a copied file is useless elsewhere.
+  - Recommended: keyless. -TenantId/-ClientId make users sign in with their work account
+    (Entra ID); no key is ever on the device. See docs/ENTERPRISE_POLICY.md for the one-time
+    Azure setup.
+  - Alternative: -ApiKey, encrypted with machine-scope DPAPI on this device, so policy.json
+    never contains it in clear text and a copied file is useless elsewhere.
   - -ModelsSource (a folder staged with fetch-models.ps1) is copied to
     %ProgramData%\Noetis\models, which the app uses instead of downloading.
   - The folder is writable by administrators only; users can read it.
 
 .EXAMPLE
-  .\deploy-policy.ps1 -Endpoint "https://contoso-ai.services.ai.azure.com/openai/v1" `
-      -Model "DeepSeek-V4-Flash-0731" -ApiKey "<foundry key>" `
-      -ModelsSource "\\fileserver\noetis-models" -Language en
+  .\deploy-policy.ps1 -Endpoint "https://contoso-ai.services.ai.azure.com/openai/v1" -Model "DeepSeek-V4-Flash-0731" -TenantId "<directory id>" -ClientId "<application id>" -ModelsSource "\\fileserver\noetis-models" -Language en
 #>
 param(
-    # AI summaries (all three together, or omit all three)
+    # AI summaries: endpoint + model, authenticated by Entra ID sign-in (recommended) or a key
     [string] $Endpoint,
     [string] $Model,
+    [string] $TenantId,
+    [string] $ClientId,
     [string] $ApiKey,
     [int] $MaxTokens = 8192,
 
@@ -63,17 +66,26 @@ $policy = [ordered]@{
 if ($Language) { $policy.transcription.language = $Language }
 if ($TemplatesDir) { $policy.templatesDir = $TemplatesDir }
 
+if ($TenantId -or $ClientId) {
+    if (-not ($TenantId -and $ClientId)) { throw 'Pass -TenantId and -ClientId together.' }
+    if ($ApiKey) { throw 'Use either -ApiKey or Entra ID sign-in (-TenantId/-ClientId), not both.' }
+    $policy.entra = [ordered]@{ tenantId = $TenantId; clientId = $ClientId }
+}
+
 if ($Endpoint -or $Model -or $ApiKey) {
-    if (-not ($Endpoint -and $Model -and $ApiKey)) { throw 'Pass -Endpoint, -Model and -ApiKey together.' }
-    Add-Type -AssemblyName System.Security
-    $cipher = [Security.Cryptography.ProtectedData]::Protect(
-        [Text.Encoding]::UTF8.GetBytes($ApiKey), $null,
-        [Security.Cryptography.DataProtectionScope]::LocalMachine)
+    if (-not ($Endpoint -and $Model)) { throw 'Pass -Endpoint and -Model together.' }
+    if (-not ($ApiKey -or $TenantId)) { throw 'Pass -TenantId/-ClientId (keyless, recommended) or -ApiKey.' }
     $policy.summary = [ordered]@{
         endpoint  = $Endpoint.TrimEnd('/')
         model     = $Model
-        apiKey    = 'dpapi:v1:' + (-join ($cipher | ForEach-Object { $_.ToString('x2') }))
         maxTokens = $MaxTokens
+    }
+    if ($ApiKey) {
+        Add-Type -AssemblyName System.Security
+        $cipher = [Security.Cryptography.ProtectedData]::Protect(
+            [Text.Encoding]::UTF8.GetBytes($ApiKey), $null,
+            [Security.Cryptography.DataProtectionScope]::LocalMachine)
+        $policy.summary.apiKey = 'dpapi:v1:' + (-join ($cipher | ForEach-Object { $_.ToString('x2') }))
     }
 }
 

@@ -430,7 +430,23 @@ impl SummaryService {
 
         // For CustomOpenAI, use its API key (if any) instead of the empty string
         let final_api_key = if provider == LLMProvider::CustomOpenAI {
-            custom_openai_api_key.unwrap_or_default()
+            // Keyless org setup: a short-lived Entra ID token instead of an API key.
+            if let Some(entra) = crate::policy::managed_entra() {
+                let token = match _app.path().app_data_dir() {
+                    Ok(dir) => crate::entra::access_token(&dir, &entra).await.map_err(|e| format!("{e:#}")),
+                    Err(e) => Err(e.to_string()),
+                };
+                match token {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let err_msg = format!("Sign-in to your organization account is required for summaries: {e}");
+                        Self::fail_and_cleanup(&pool, &meeting_id, started_at, &err_msg).await;
+                        return;
+                    }
+                }
+            } else {
+                custom_openai_api_key.unwrap_or_default()
+            }
         } else {
             api_key
         };

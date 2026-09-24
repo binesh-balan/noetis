@@ -387,7 +387,11 @@ pub(crate) async fn generate_summary(
 
     // Azure (AI Foundry / Azure OpenAI) takes keys in `api-key`; a Bearer header there
     // is treated as an Entra ID token and rejected.
-    if provider == &LLMProvider::CustomOpenAI && is_azure_endpoint(&api_url) {
+    // With org Entra ID sign-in, `api_key` is an access token and goes in Authorization.
+    if provider == &LLMProvider::CustomOpenAI
+        && is_azure_endpoint(&api_url)
+        && crate::policy::managed_entra().is_none()
+    {
         if !api_key.is_empty() {
             headers.insert(
                 "api-key",

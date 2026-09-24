@@ -42,6 +42,7 @@ pub mod config;
 pub mod console_utils;
 pub mod database;
 pub mod diarization;
+pub mod entra;
 pub mod network_policy;
 pub mod notifications;
 pub mod ollama;
@@ -766,6 +767,9 @@ pub fn run() {
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
             policy::api_get_managed_policy,
+            entra::api_entra_status,
+            entra::api_entra_sign_in,
+            entra::api_entra_sign_out,
             // Summary commands
             summary::commands::api_process_transcript,
             summary::commands::api_get_summary,

@@ -37,6 +37,8 @@ use std::path::PathBuf;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ManagedPolicy {
     pub summary: Option<CustomOpenAIConfig>,
+    /// Keyless summary auth: users sign in with their work account (see entra.rs).
+    pub entra: Option<crate::entra::EntraConfig>,
     pub transcription: Option<TranscriptionPolicy>,
     pub templates_dir: Option<PathBuf>,
     pub models_dir: Option<PathBuf>,
@@ -84,6 +86,11 @@ pub fn parse(json: &str) -> Result<ManagedPolicy, String> {
         }
         if s.model.trim().is_empty() {
             return Err("Invalid managed policy: summary.model is required".into());
+        }
+    }
+    if let Some(e) = &policy.entra {
+        if e.tenant_id.trim().is_empty() || e.client_id.trim().is_empty() {
+            return Err("Invalid managed policy: entra.tenantId and entra.clientId are required".into());
         }
     }
     if let Some(t) = &policy.transcription {
@@ -142,6 +149,11 @@ pub fn templates_dir() -> Option<PathBuf> {
     POLICY.as_ref().ok().and_then(|p| p.templates_dir.clone())
 }
 
+/// Entra ID sign-in settings when the org uses keyless summary auth.
+pub fn managed_entra() -> Option<crate::entra::EntraConfig> {
+    POLICY.as_ref().ok().and_then(|p| p.entra.clone())
+}
+
 pub fn managed_transcription() -> Option<TranscriptionPolicy> {
     POLICY.as_ref().ok().and_then(|p| p.transcription.clone())
 }
@@ -182,6 +194,7 @@ pub fn api_get_managed_policy() -> serde_json::Value {
             "summaryManaged": p.summary.is_some(),
             "templatesManaged": p.templates_dir.is_some(),
             "transcriptionManaged": p.transcription.is_some(),
+            "entraSignIn": p.entra.is_some(),
             "downloadsAllowed": p.allow_model_downloads.unwrap_or(true),
             "analyticsDisabled": p.disable_analytics,
             "error": null,
@@ -216,6 +229,10 @@ mod tests {
         assert_eq!(t.allow_model_downloads, Some(false));
         assert!(t.disable_analytics);
         assert!(parse(r#"{"transcription":{"provider":"cloud","model":"x"}}"#).is_err());
+        let e = parse(r#"{"summary":{"endpoint":"https://x.services.ai.azure.com/openai/v1","model":"m"},"entra":{"tenantId":"t","clientId":"c"}}"#).unwrap();
+        assert_eq!(e.entra.unwrap().client_id, "c");
+        assert!(parse(r#"{"entra":{"tenantId":"t","clientId":" "}}"#).is_err());
+        assert!(parse(r#"{"entra":{"tenantId":"t","clientId":"c","secret":"x"}}"#).is_err(), "no client secrets");
         assert!(parse(r#"{"transcription":{"provider":"parakeet","model":""}}"#).is_err());
     }
 

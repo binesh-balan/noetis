@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
+import { OrgAccountSettings } from '@/components/OrgAccountSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { BetaSettings } from '@/components/BetaSettings';
@@ -116,6 +117,7 @@ export default function SettingsPage() {
             </TabsList>
 
             <TabsContent value="general">
+              <OrgAccountSettings />
               <PreferenceSettings />
             </TabsContent>
             <TabsContent value="recording">
