@@ -84,7 +84,7 @@ export function TranscriptPanel({
       )}
 
       {/* Transcript content */}
-      <div className="px-4 pb-4">
+      <div className="pb-4">
         <VirtualizedTranscriptView
           segments={segments}
           isRecording={isRecording}

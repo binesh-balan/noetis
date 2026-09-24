@@ -9,20 +9,20 @@ const MIN_RATIO = 0.3;
 const MAX_RATIO = 0.5;
 
 
-function readStoredRatio(): number {
-  if (typeof window === 'undefined') return DEFAULT_RATIO;
+function readStoredRatio(key: string, fallback: number, min: number, max: number): number {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     const n = raw == null ? NaN : Number(raw);
-    return Number.isFinite(n) && n >= MIN_RATIO && n <= MAX_RATIO ? n : DEFAULT_RATIO;
+    return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
   } catch {
-    return DEFAULT_RATIO;
+    return fallback;
   }
 }
 
-function writeStoredRatio(value: number): void {
+function writeStoredRatio(key: string, value: number): void {
   try {
-    localStorage.setItem(STORAGE_KEY, String(value));
+    localStorage.setItem(key, String(value));
   } catch {
     // Layout persistence is optional.
   }
@@ -40,6 +40,11 @@ interface MeetingDetailsSplitViewProps {
   summaryLabel?: string;
   /** Icon for the summary/status tab; the live Home view passes Activity instead of Sparkles. */
   summaryIcon?: LucideIcon;
+  /** Split persistence/bounds; defaults are the meeting-details values. */
+  storageKey?: string;
+  defaultRatio?: number;
+  minRatio?: number;
+  maxRatio?: number;
 }
 
 export function MeetingDetailsSplitView({
@@ -50,20 +55,27 @@ export function MeetingDetailsSplitView({
   transcriptLabel = 'Transcript',
   summaryLabel = 'Summary',
   summaryIcon = Sparkles,
+  storageKey = STORAGE_KEY,
+  defaultRatio = DEFAULT_RATIO,
+  minRatio = MIN_RATIO,
+  maxRatio = MAX_RATIO,
 }: MeetingDetailsSplitViewProps) {
   const tabs = [
     { value: 'transcript' as const, label: transcriptLabel, icon: FileText },
     { value: 'summary' as const, label: summaryLabel, icon: summaryIcon },
   ];
   const containerRef = useRef<HTMLDivElement>(null);
-  const [ratio, setRatio] = useState(DEFAULT_RATIO);
+  const [ratio, setRatio] = useState(defaultRatio);
   const [isDesktop, setIsDesktop] = useState(true);
   const dragging = useRef(false);
-  const clampRatio = (value: number) => Math.min(MAX_RATIO, Math.max(MIN_RATIO, value));
+  const clampRatio = useCallback(
+    (value: number) => Math.min(maxRatio, Math.max(minRatio, value)),
+    [minRatio, maxRatio]
+  );
 
   useEffect(() => {
-    setRatio(readStoredRatio());
-  }, []);
+    setRatio(readStoredRatio(storageKey, defaultRatio, minRatio, maxRatio));
+  }, [storageKey, defaultRatio, minRatio, maxRatio]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)');
@@ -83,30 +95,30 @@ export function MeetingDetailsSplitView({
     if (!dragging.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     setRatio(clampRatio((event.clientX - rect.left) / rect.width));
-  }, []);
+  }, [clampRatio]);
 
   const onPointerUp = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
     setRatio((current) => {
-      writeStoredRatio(current);
+      writeStoredRatio(storageKey, current);
       return current;
     });
-  }, []);
+  }, [storageKey]);
 
   const onSeparatorKeyDown = useCallback((event: React.KeyboardEvent) => {
     const current = ratio;
     const next =
       event.key === 'ArrowLeft' ? clampRatio(current - 0.05) :
       event.key === 'ArrowRight' ? clampRatio(current + 0.05) :
-      event.key === 'Home' ? MIN_RATIO :
-      event.key === 'End' ? MAX_RATIO :
+      event.key === 'Home' ? minRatio :
+      event.key === 'End' ? maxRatio :
       null;
     if (next === null) return;
     event.preventDefault();
     setRatio(next);
-    writeStoredRatio(next);
-  }, [ratio]);
+    writeStoredRatio(storageKey, next);
+  }, [ratio, clampRatio, minRatio, maxRatio, storageKey]);
 
   const transcriptPanelProps = isDesktop
     ? { role: 'region' as const, 'aria-label': transcriptLabel, tabIndex: -1 }
@@ -158,8 +170,8 @@ export function MeetingDetailsSplitView({
           role="separator"
           aria-orientation="vertical"
           aria-valuenow={Math.round(ratio * 100)}
-          aria-valuemin={Math.round(MIN_RATIO * 100)}
-          aria-valuemax={Math.round(MAX_RATIO * 100)}
+          aria-valuemin={Math.round(minRatio * 100)}
+          aria-valuemax={Math.round(maxRatio * 100)}
           aria-valuetext={`${transcriptLabel} panel ${Math.round(ratio * 100)} percent`}
           aria-label={`Resize ${transcriptLabel.toLowerCase()} and ${summaryLabel.toLowerCase()}`}
           tabIndex={0}

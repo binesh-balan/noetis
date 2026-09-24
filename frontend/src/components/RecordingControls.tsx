@@ -346,7 +346,7 @@ export const RecordingControls: React.FC<RecordingControlsProps> = ({
                 <>
                   <button
                     onClick={handleStartRecording}
-                    className="w-10 h-10 flex items-center justify-center bg-destructive rounded-full text-primary-foreground hover:bg-destructive/90 transition-colors"
+                    className="w-10 h-10 flex items-center justify-center bg-destructive rounded-full text-destructive-foreground hover:bg-destructive/90 transition-colors"
                   >
                     <Mic size={16} />
                   </button>

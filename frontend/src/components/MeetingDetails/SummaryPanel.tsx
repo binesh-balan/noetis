@@ -249,7 +249,7 @@ export function SummaryPanel({
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-background overflow-hidden h-full w-full @container">
       {/* Top-level actions — always visible, same pattern as TranscriptPanel */}
-      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+      <div className="flex min-h-11 items-center gap-2 border-b border-border px-4">
         <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Summary</h2>
         <div className="ml-auto flex min-w-0 items-center gap-2 flex-wrap justify-end">
           <div className="flex-shrink-0 min-w-0">

@@ -247,6 +247,10 @@ export default function Home() {
             onTabChange={setLiveTab}
             summaryLabel="Status"
             summaryIcon={Activity}
+            storageKey="noetis.live.transcriptPaneRatio"
+            defaultRatio={0.65}
+            minRatio={0.5}
+            maxRatio={0.8}
           />
         ) : (
           <HomeIdle startControl={controls} />

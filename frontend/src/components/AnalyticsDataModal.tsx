@@ -23,7 +23,7 @@ export default function AnalyticsDataModal({ isOpen, onClose, onConfirmDisable }
           </div>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-muted-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

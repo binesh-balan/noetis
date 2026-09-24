@@ -32,9 +32,10 @@ export function ProgressIndicator({ current, total, onStepClick }: ProgressIndic
               <button
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
+                aria-current={isActive ? 'step' : undefined}
                 className={`relative flex items-center justify-center transition-all duration-300 ${
                   isCompleted
-                    ? 'w-7 h-7 bg-primary rounded-full'
+                    ? 'w-7 h-7 bg-primary/40 rounded-full'
                     : isActive
                       ? 'w-8 h-8 bg-primary rounded-full'
                       : 'w-6 h-6 bg-muted rounded-full'

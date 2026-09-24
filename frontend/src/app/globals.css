@@ -97,6 +97,7 @@
     --destructive: 358 64.9% 48%;
     --destructive-foreground: 0 0% 100%;
     --recording: 358 64.9% 48%;
+    --overlay: 0 0% 0%;
     --success: 153 66.9% 28.4%;
     --success-foreground: 0 0% 100%;
     --warning: 30 100% 32%;
@@ -138,6 +139,7 @@
     --destructive: 358 85.8% 64.1%;
     --destructive-foreground: 225 12.5% 6.3%;
     --recording: 358 85.8% 64.1%;
+    --overlay: 0 0% 0%;
     --success: 160 58.6% 56.5%;
     --success-foreground: 225 12.5% 6.3%;
     --warning: 37 91.3% 55.1%;
@@ -161,6 +163,7 @@
 
 @layer base {
   * {
+    scrollbar-color: hsl(var(--border)) transparent;
     @apply border-border;
   }
 
@@ -192,18 +195,18 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: hsl(var(--border));
     border-radius: 3px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
+    background: hsl(var(--muted-foreground));
   }
 
   /* Firefox scrollbar */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: #d1d5db transparent;
+    scrollbar-color: hsl(var(--border)) transparent;
   }
 
   /* BlockNote Editor - Override fixed dimensions for responsive layout */
@@ -237,4 +240,9 @@
   [data-node-type] {
     overflow: visible !important;
   }
+}
+/* Summary editor sits on the app background, not BlockNote's own. Outside @layer so it isn't purged;
+   .bn-container raises specificity over BlockNote's `.bn-shadcn .bn-editor`. */
+.bn-container.bn-shadcn .bn-editor {
+  background-color: transparent;
 }

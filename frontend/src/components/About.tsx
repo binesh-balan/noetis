@@ -90,19 +90,19 @@ export function About() {
             <div className="space-y-3">
                 <h2 className="text-base font-semibold text-foreground">What makes Noetis different</h2>
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-muted rounded p-3 hover:bg-muted transition-colors">
+                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
                         <h3 className="font-bold text-sm text-foreground mb-1">Privacy-first</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Your data & AI processing workflow can now stay within your premise. No cloud, no leaks.</p>
                     </div>
-                    <div className="bg-muted rounded p-3 hover:bg-muted transition-colors">
+                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
                         <h3 className="font-bold text-sm text-foreground mb-1">Use Any Model</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Prefer local open-source model? Great. Want to plug in an external API? Also fine. No lock-in.</p>
                     </div>
-                    <div className="bg-muted rounded p-3 hover:bg-muted transition-colors">
+                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
                         <h3 className="font-bold text-sm text-foreground mb-1">Cost-Smart</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Avoid pay-per-minute bills by running models locally (or pay only for the calls you choose).</p>
                     </div>
-                    <div className="bg-muted rounded p-3 hover:bg-muted transition-colors">
+                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
                         <h3 className="font-bold text-sm text-foreground mb-1">Works everywhere</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">Google Meet, Zoom, Teams-online or offline.</p>
                     </div>

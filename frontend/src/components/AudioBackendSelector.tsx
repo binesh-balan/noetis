@@ -99,7 +99,7 @@ export function AudioBackendSelector({
             type="button"
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
-            className="text-muted-foreground hover:text-muted-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <Info className="h-4 w-4" />
           </button>

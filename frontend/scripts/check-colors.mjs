@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const RAW = /\b(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|from|to|via|divide|outline|placeholder|decoration|accent|caret|shadow)-(?:gray|slate|zinc|neutral|stone|blue|sky|indigo|red|rose|green|emerald|yellow|amber|orange|purple|violet|pink|teal|cyan|lime|white|black)(?:-\d{2,3})?(?:\/\d+)?\b/g;
+const RAW = /\b(?:[a-z-]+:)*(?:bg|text|border(?:-[trblxy])?|ring|fill|stroke|from|to|via|divide(?:-[xy])?|outline|placeholder|decoration|accent|caret|shadow)-(?:gray|slate|zinc|neutral|stone|blue|sky|indigo|red|rose|green|emerald|yellow|amber|orange|purple|violet|fuchsia|pink|teal|cyan|lime|white|black)(?:-\d{2,3})?(?:\/\d+)?\b/g;
 // Paths allowed to keep raw colours, with the reason.
 const ALLOW = new Map([
   // ['src/components/Example.tsx', 'third-party brand colour'],

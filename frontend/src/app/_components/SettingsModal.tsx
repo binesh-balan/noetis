@@ -50,7 +50,7 @@ export function SettingsModals({
   return <>
     {/* Language Settings Modal */}
     {modals.languageSettings && (
-      <div className="fixed inset-0 bg-foreground/50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50">
         <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-foreground">Language Settings</h3>
@@ -87,7 +87,7 @@ export function SettingsModals({
 
     {/* Model Selection Modal */}
     {modals.modelSelector && (
-      <div className="fixed inset-0 bg-foreground/50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50">
         <div className="bg-background rounded-lg max-w-4xl w-full mx-4 shadow-xl max-h-[90vh] flex flex-col">
           {/* Fixed Header */}
           <div className="flex justify-between items-center p-6 pb-4 border-b border-border">
@@ -145,7 +145,7 @@ export function SettingsModals({
 
     {/* Error Alert Modal */}
     {modals.errorAlert && (
-      <div className="fixed inset-0 bg-foreground/50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50">
         <Alert className="max-w-md mx-4 border-destructive bg-background shadow-xl">
           <AlertTitle className="text-destructive">Recording Stopped</AlertTitle>
           <AlertDescription className="text-destructive">
@@ -163,7 +163,7 @@ export function SettingsModals({
 
     {/* Chunk Drop Warning Modal */}
     {modals.chunkDropWarning && (
-      <div className="fixed inset-0 bg-foreground/50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50">
         <Alert className="max-w-lg mx-4 border-warning/40 bg-background shadow-xl">
           <AlertTitle className="text-warning">Transcription Performance Warning</AlertTitle>
           <AlertDescription className="text-warning">

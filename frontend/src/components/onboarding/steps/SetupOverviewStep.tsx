@@ -68,7 +68,7 @@ export function SetupOverviewStep() {
                             <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                <button className="text-muted-foreground hover:text-muted-foreground">
+                                <button className="text-muted-foreground hover:text-foreground">
                                     <Info className="w-4 h-4" />
                                 </button>
                                 </TooltipTrigger>

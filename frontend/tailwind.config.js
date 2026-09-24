@@ -5,6 +5,8 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/lib/**/*.{js,ts,jsx,tsx}',
+    './src/hooks/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
   	extend: {
@@ -19,6 +21,7 @@ module.exports = {
   			ring: 'hsl(var(--ring) / <alpha-value>)',
   			sidebar: 'hsl(var(--sidebar) / <alpha-value>)',
   			recording: 'hsl(var(--recording) / <alpha-value>)',
+  			overlay: 'hsl(var(--overlay) / <alpha-value>)',
   			success: {
   				DEFAULT: 'hsl(var(--success) / <alpha-value>)',
   				foreground: 'hsl(var(--success-foreground) / <alpha-value>)'

@@ -2,7 +2,7 @@
 
 import './globals.css'
 import { Inter } from 'next/font/google'
-import { THEME_BOOT_SCRIPT } from '@/hooks/useTheme'
+import { THEME_BOOT_SCRIPT, useTheme } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
 import { SidebarProvider, useSidebar } from '@/components/Sidebar/SidebarProvider'
 import { CommandPalette } from '@/components/CommandPalette'
@@ -62,6 +62,12 @@ function ConditionalImportDialog({
 }
 
 // Module-level for the same reason as ConditionalImportDialog; must sit inside the providers.
+// Toaster follows the app's theme choice, not the OS.
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme()
+  return <Toaster position="bottom-center" richColors closeButton theme={resolvedTheme} />
+}
+
 function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isRecording } = useRecordingState();
@@ -297,7 +303,7 @@ export default function RootLayout({
           </RecordingStateProvider>
         </AnalyticsProvider>
 
-        <Toaster position="bottom-center" richColors closeButton theme="system" />
+        <ThemedToaster />
       </body>
     </html>
   )

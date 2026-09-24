@@ -82,7 +82,7 @@ export const ComplianceNotification: React.FC<ComplianceNotificationProps> = ({
           </div>
           <button
             onClick={handleClose}
-            className="text-muted-foreground hover:text-muted-foreground transition-colors p-0.5 rounded hover:bg-muted"
+            className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted"
           >
             <X className="h-3 w-3" />
           </button>

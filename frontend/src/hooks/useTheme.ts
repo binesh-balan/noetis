@@ -22,7 +22,10 @@ function apply(choice: ThemeChoice): 'dark' | 'light' {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeChoice>('system');
-  const [resolvedTheme, setResolved] = useState<'dark' | 'light'>('dark');
+  // Seed from the class the boot script already set, so light users don't flash dark.
+  const [resolvedTheme, setResolved] = useState<'dark' | 'light'>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  );
 
   useEffect(() => {
     const initial = read();

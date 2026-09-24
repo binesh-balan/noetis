@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
@@ -37,6 +37,7 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const tabParam = useSearchParams().get('tab');
+  const router = useRouter();
   const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
   // Org-managed transcription: hide the tab entirely.
   const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
@@ -75,9 +76,12 @@ function SettingsContent() {
         {tabs.map(({ value, label, icon: Icon }) => (
           <button
             key={value}
-            onClick={() => setActiveTab(value)}
+            onClick={() => {
+              setActiveTab(value);
+              router.replace('/settings?tab=' + value);
+            }}
             aria-current={activeTab === value ? 'page' : undefined}
-            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               activeTab === value ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >

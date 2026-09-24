@@ -347,7 +347,10 @@ const Sidebar: React.FC = () => {
               >
                 {recordingDot}
                 <span>{recordingLabel}</span>
-                <span className="ml-auto tabular-nums text-muted-foreground">{formatDuration(liveSeconds)}</span>
+                {pathname !== '/' && (
+                  // On home the RecordingBar already shows the timer.
+                  <span className="ml-auto tabular-nums text-muted-foreground">{formatDuration(liveSeconds)}</span>
+                )}
               </Link>
             ) : (
               <button
@@ -471,7 +474,7 @@ const Sidebar: React.FC = () => {
                       handleEditCancel();
                     }
                   }}
-                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="Enter meeting title"
                   autoFocus
                 />

@@ -10,7 +10,7 @@ const Row = ({ k, v }: { k: string; v: string }) => (
   </div>
 );
 
-export function LiveStatusPane({ children }: { children?: React.ReactNode }) {
+export function LiveStatusPane() {
   const { selectedDevices, transcriptModelConfig, selectedLanguage } = useConfig();
   const { isPaused } = useRecordingState();
   const language = LANGUAGES.find((l) => l.code === selectedLanguage)?.name ?? selectedLanguage;
@@ -28,7 +28,6 @@ export function LiveStatusPane({ children }: { children?: React.ReactNode }) {
         <Row k="Model" v={transcriptModelConfig.model} />
         {language && <Row k="Language" v={language} />}
       </section>
-      {children}
       <p className="mt-auto text-xs text-muted-foreground">The summary appears here after you stop.</p>
     </div>
   );

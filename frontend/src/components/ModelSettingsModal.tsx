@@ -1317,7 +1317,7 @@ export function ModelSettingsModal({
                           className={cn(
                             'bg-card p-2 m-0 rounded-md border transition-colors',
                             modelConfig.model === model.name
-                              ? 'ring-1 ring-primary border-primary background-blue-100'
+                              ? 'ring-1 ring-primary border-primary'
                               : 'hover:bg-muted/50',
                             !modelIsDownloading && 'cursor-pointer'
                           )}

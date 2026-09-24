@@ -7,8 +7,7 @@ import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
 import { ConfidenceIndicator } from "./ConfidenceIndicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { RecordingStatusBar } from "./RecordingStatusBar";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
 
 export interface VirtualizedTranscriptViewProps {
@@ -283,17 +282,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 
     return (
         <div ref={scrollRef} className="flex flex-col h-full overflow-y-auto px-4 py-2">
-            {/* Recording Status Bar - Sticky at top, always visible when recording */}
-            <AnimatePresence>
-                {isRecording && (
-                    <div className="sticky top-0 z-10 bg-background pb-2">
-                        <RecordingStatusBar isPaused={isPaused} />
-                    </div>
-                )}
-            </AnimatePresence>
-
-            {/* Content - add padding when recording to prevent overlap */}
-            <div className={isRecording ? 'pt-2' : ''}>
+            <div>
             {segments.length === 0 ? (
                 // Empty state
                 <motion.div
@@ -368,7 +357,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <div className="w-4 h-4 border-2 border-border border-t-gray-600 rounded-full animate-spin" />
+                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
@@ -427,7 +416,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <div className="w-4 h-4 border-2 border-border border-t-gray-600 rounded-full animate-spin" />
+                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
