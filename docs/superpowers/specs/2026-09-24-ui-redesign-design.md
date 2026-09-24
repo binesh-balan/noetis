@@ -65,23 +65,27 @@ Guard: `frontend/scripts/check-colors.mjs` fails if raw palette classes (`(bg|te
 
 ## 3. App shell
 
-`layout.tsx` renders a CSS grid: `[sidebar | main]` over an optional `RecordingBar` row. The sidebar is no longer `position: fixed`; the 20 `sidebarCollapsed ? '4rem' : '16rem'` margin compensations are removed.
+`layout.tsx` renders a flex row: `[sidebar | main]`, both full height. The sidebar is no longer `position: fixed`; the 20 `sidebarCollapsed ? '4rem' : '16rem'` margin compensations are removed.
 
 **Sidebar** (`components/Sidebar/index.tsx`, rewritten in place; `SidebarProvider` unchanged):
 header (Noetis + ⌘K hint) → New recording / Recording… → Import audio → transcript search (existing, match snippet restyled) → meetings grouped Today / Yesterday / This week / Earlier with hover rename/delete → Settings pinned bottom. Collapses to a 48 px icon strip (`⌘\`).
 
-**RecordingBar** (`components/RecordingBar.tsx`): visible on all routes while recording or processing: dot, elapsed time, level wave, pause/resume, stop, meeting title (click → `/`). Wraps existing `RecordingControls` logic; absorbs `StatusOverlays` (processing/saving) as a progress state.
+**RecordingBar** (`app/_components/RecordingBar.tsx`): docked at the bottom of the Home page while recording or processing: dot, elapsed time, level wave, pause/resume, stop. Wraps existing `RecordingControls`; absorbs `StatusOverlays` (processing/saving) as a progress state.
+
+*Revised after reading the code:* the start/stop engine (`useRecordingStart`, `useRecordingStop`, `useRecordingStateSync`: ~960 lines) is mounted by the Home page, and starting from other routes already works via the `autoStartRecording` session flag. Hoisting it into the layout would be a behaviour change, so the bar stays on Home. On other routes the sidebar's top action becomes a live **● Recording · 12:04** item (from `RecordingStateContext.activeDuration`) that navigates to `/`. Stopping still happens on Home, as today.
 
 **Command palette** (`components/CommandPalette.tsx`, uses existing `ui/command.tsx`): new/stop recording, import audio, jump to meeting (titles already in `SidebarProvider`), settings, theme.
 
-**Shortcuts** (one `useHotkeys` effect): `⌘/Ctrl+K` palette, `⌘/Ctrl+R` record toggle, `⌘/Ctrl+\` sidebar, `⌘/Ctrl+,` settings.
+**Shortcuts** (one `useHotkeys` effect): `⌘/Ctrl+K` palette, `⌘/Ctrl+R` start recording (same path as the sidebar button; while recording it opens `/`), `⌘/Ctrl+\` sidebar, `⌘/Ctrl+,` settings.
 
 Routes unchanged: `/`, `/meeting-details?id=`, `/settings`.
 
 ## 4. Screens
 
 1. **Home, idle:** centred empty state: Start recording (⌘R), Import audio, one line summarising mic / system / model / local-vs-cloud with "Change" → Settings › Recordings.
-2. **Home, recording:** `MeetingDetailsSplitView`-style resizable split. Left: live transcript (existing `TranscriptPanel`, speaker colours, in-progress line italic + caret, editable title). Right: `LiveStatusPane` (levels via `AudioLevelMeter`, device names, model/language/GPU, and inline warnings: Bluetooth, permissions, chunk progress).
+2. **Home, recording:** `MeetingDetailsSplitView`-style resizable split. Left: live transcript (existing `TranscriptPanel`, speaker colours, in-progress line italic + caret, editable title). Right: `LiveStatusPane` (device names, transcription provider/model, language, paused/active state, and inline warnings: permissions, Bluetooth playback, chunk progress).
+
+*Revised after reading the code:* no audio-level signal exists during recording. The bars in `RecordingControls` are driven by `Math.random()` in `page.tsx`, and the real `audio-levels` monitor (`start_audio_level_monitoring`) opens its own device streams and is only used in device setup. Real live meters need Rust work, so they are out of scope; the pane shows no fake meters, and the bottom bar keeps the existing decorative activity bars.
 3. **Meeting details:** same split; single thin toolbar (title · Copy · Export · Retranscribe · Generate/Update summary as compact icon+label buttons, logic in existing `*ButtonGroup` files unchanged); 1 px divider, primary on hover/drag; audio player as slim footer of the transcript pane.
 4. **Settings:** left sub-nav (General, Recordings, Transcription, Summary, Templates, Beta, **Appearance**); managed-policy hiding of Transcription preserved. `SettingsModal.tsx` audited: alerts/errors stay dialogs, model-settings modals route to the matching settings section.
 5. **Onboarding:** tokens, theme, centred narrow card. Steps unchanged.
@@ -107,4 +111,4 @@ Unchanged: transcript virtualisation, transcript recovery, managed-policy hiding
 | 4c | Settings sub-nav + `SettingsModal` audit |
 | 4d | Onboarding restyle |
 
-Risk: step 3 moves the recording start/stop wiring out of `page.tsx`. Mitigation: `RecordingControls` internals untouched; smoke test gates the merge.
+Risk: step 4a restructures `page.tsx` around the recording hooks. Mitigation: the hooks and `RecordingControls` internals are untouched (only JSX around them changes); the smoke test gates the merge.
