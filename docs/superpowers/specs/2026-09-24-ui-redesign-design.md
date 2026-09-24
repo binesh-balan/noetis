@@ -35,6 +35,7 @@ The shadcn token names in `frontend/src/app/globals.css` stay the same; only the
 | `--destructive`, `--recording` (new) | `#f2555a` | `#ce2c31` |
 | `--destructive-foreground` | `#0e0f12` | `#ffffff` |
 | `--success` (new) | `#4fd1a5` | `#18794e` |
+| `--warning` (+ `-foreground`, added in Task 2 review) | `#f5a524` | `#a35200` |
 | `--speaker-1..6` (new) | `#8b8cf7 #4fd1a5 #f5a524 #f47fb5 #5cc8ff #c39cff` | `#5b5bd6 #18794e #a35200 #c2297a #0b6fad #7a4bd6` |
 
 Measured contrast (WCAG): dark fg/bg 15.5, dark muted-fg on muted 4.97, dark primary on bg 6.56, dark primary-fg on primary 6.56, dark recording on muted 4.88; light fg/bg 17.3, light muted-fg on muted 5.14, light primary on muted 4.56, white on primary 5.37, light destructive on bg 5.04, white on destructive 5.21. Decorative `--border` is exempt (non-interactive dividers); form outlines use `--input` (≥ 3:1). A contrast check script (`frontend/scripts/check-contrast.mjs`) asserts every pair.
