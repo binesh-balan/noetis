@@ -39,10 +39,10 @@ export function OrgAccountSettings() {
   if (!status?.enabled) return null;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-4 flex items-center justify-between gap-4">
+    <div className="bg-background rounded-lg border border-border p-6 shadow-sm mb-4 flex items-center justify-between gap-4">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">Organization account</h3>
-        <p className="text-sm text-gray-600">
+        <h3 className="text-lg font-semibold text-foreground">Organization account</h3>
+        <p className="text-sm text-muted-foreground">
           {status.signedIn
             ? `AI summaries use your work account${status.account ? ` (${status.account})` : ''}.`
             : 'Sign in with your work account to enable AI summaries.'}
