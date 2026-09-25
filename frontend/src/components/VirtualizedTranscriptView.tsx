@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useRef, useReducer, startTransition, useEffect, useState, memo } from "react";
+import { useCallback, useRef, useReducer, startTransition, useEffect, useState, useMemo, memo } from "react";
+import { speakerColorClass } from "@/lib/speakerColor";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
 import { ConfidenceIndicator } from "./ConfidenceIndicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { RecordingStatusBar } from "./RecordingStatusBar";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
 
 export interface VirtualizedTranscriptViewProps {
@@ -65,16 +65,8 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
-// Stable colour per speaker name so the same person reads the same everywhere.
-const SPEAKER_COLORS = ['text-blue-700', 'text-emerald-700', 'text-amber-700', 'text-fuchsia-700', 'text-cyan-700', 'text-rose-700'];
-function speakerColor(name: string) {
-    let h = 0;
-    for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return SPEAKER_COLORS[h % SPEAKER_COLORS.length];
-}
-
 // Speaker name; click to rename (Enter saves, Escape cancels).
-function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from: string, to: string) => void }) {
+function SpeakerLabel({ speaker, colorClass, onRename }: { speaker: string; colorClass: string; onRename?: (from: string, to: string) => void }) {
     const [editing, setEditing] = useState(false);
     const [value, setValue] = useState(speaker);
     const commit = () => {
@@ -88,7 +80,7 @@ function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from
             <input
                 autoFocus
                 aria-label="Speaker name"
-                className="text-xs font-semibold border border-gray-300 rounded px-1 py-0.5 mb-0.5 w-40"
+                className="text-xs font-semibold border border-border rounded px-1 py-0.5 mb-0.5 w-40"
                 value={value}
                 maxLength={64}
                 onChange={e => setValue(e.target.value)}
@@ -103,7 +95,7 @@ function SpeakerLabel({ speaker, onRename }: { speaker: string; onRename?: (from
     return (
         <button
             type="button"
-            className={`text-xs font-semibold mb-0.5 ${speakerColor(speaker)} ${onRename ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+            className={`text-xs font-semibold mb-0.5 ${colorClass} ${onRename ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
             title={onRename ? 'Rename speaker (use an existing name to merge)' : undefined}
             onClick={() => onRename && setEditing(true)}
         >
@@ -121,6 +113,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isStreaming,
     showConfidence,
     speaker,
+    speakerClass,
     onRenameSpeaker,
 }: {
     id: string;
@@ -130,6 +123,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isStreaming: boolean;
     showConfidence: boolean;
     speaker?: string | null;
+    speakerClass?: string;
     onRenameSpeaker?: (from: string, to: string) => void;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
@@ -139,7 +133,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
             <div className="flex items-start gap-2">
                 <Tooltip>
                     <TooltipTrigger>
-                        <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[50px]">
+                        <span className="text-xs text-muted-foreground mt-1 flex-shrink-0 min-w-[50px]">
                             {formatRecordingTime(timestamp)}
                         </span>
                     </TooltipTrigger>
@@ -150,13 +144,14 @@ const TranscriptSegment = memo(function TranscriptSegment({
                     </TooltipContent>
                 </Tooltip>
                 <div className="flex-1">
-                    {speaker && <SpeakerLabel key={speaker} speaker={speaker} onRename={onRenameSpeaker} />}
+                    {speaker && <SpeakerLabel key={speaker} speaker={speaker} colorClass={speakerClass ?? speakerColorClass(0)} onRename={onRenameSpeaker} />}
                     {isStreaming ? (
-                        <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-                            <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
-                        </div>
+                        <p className="text-base italic text-muted-foreground leading-relaxed">
+                            {displayText}
+                            <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-primary align-middle" />
+                        </p>
                     ) : (
-                        <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
+                        <p className="text-base text-foreground leading-relaxed">{displayText}</p>
                     )}
                 </div>
             </div>
@@ -200,6 +195,13 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
             });
         },
     });
+
+    // Speakers coloured by first-appearance order among loaded segments.
+    const speakerOrder = useMemo(() => {
+        const order = new Map<string, number>();
+        for (const s of segments) if (s.speaker && !order.has(s.speaker)) order.set(s.speaker, order.size);
+        return order;
+    }, [segments]);
 
     // Custom hook for auto-scrolling (supports both virtualized and non-virtualized)
     useAutoScroll({
@@ -280,33 +282,23 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
 
     return (
         <div ref={scrollRef} className="flex flex-col h-full overflow-y-auto px-4 py-2">
-            {/* Recording Status Bar - Sticky at top, always visible when recording */}
-            <AnimatePresence>
-                {isRecording && (
-                    <div className="sticky top-0 z-10 bg-white pb-2">
-                        <RecordingStatusBar isPaused={isPaused} />
-                    </div>
-                )}
-            </AnimatePresence>
-
-            {/* Content - add padding when recording to prevent overlap */}
-            <div className={isRecording ? 'pt-2' : ''}>
+            <div>
             {segments.length === 0 ? (
                 // Empty state
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center text-gray-500 mt-8"
+                    className="text-center text-muted-foreground mt-8"
                 >
                     {isRecording ? (
                         <>
                             <div className="flex items-center justify-center mb-3">
-                                <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-orange-500' : 'bg-blue-500 animate-pulse'}`}></div>
+                                <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-warning' : 'bg-primary animate-pulse'}`}></div>
                             </div>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-muted-foreground">
                                 {isPaused ? 'Recording paused' : 'Listening for speech...'}
                             </p>
-                            <p className="text-xs mt-1 text-gray-400">
+                            <p className="text-xs mt-1 text-muted-foreground">
                                 {isPaused ? 'Click resume to continue recording' : 'Speak to see live transcription'}
                             </p>
                         </>
@@ -352,6 +344,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                         speaker={segment.speaker}
+                                        speakerClass={segment.speaker ? speakerColorClass(speakerOrder.get(segment.speaker) ?? 0) : undefined}
                                         onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </div>
@@ -363,12 +356,12 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                     {(hasMore || isLoadingMore) && !isRecording && segments.length > 0 && (
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
-                                <div className="flex items-center gap-2 text-gray-500">
-                                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
-                                <span className="text-sm text-gray-400">
+                                <span className="text-sm text-muted-foreground">
                                     Showing {loadedCount} of {totalCount} segments
                                 </span>
                             ) : null}
@@ -381,9 +374,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="flex items-center gap-2 mt-4 text-gray-500"
+                            className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                             <span className="text-sm">Listening...</span>
                         </motion.div>
                     )}
@@ -410,6 +403,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                         speaker={segment.speaker}
+                                        speakerClass={segment.speaker ? speakerColorClass(speakerOrder.get(segment.speaker) ?? 0) : undefined}
                                         onRenameSpeaker={onRenameSpeaker}
                                     />
                                 </motion.div>
@@ -421,12 +415,12 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                     {(hasMore || isLoadingMore) && !isRecording && segments.length > 0 && (
                         <div ref={loadMoreTriggerRef} className="flex justify-center items-center py-4 mt-2">
                             {isLoadingMore ? (
-                                <div className="flex items-center gap-2 text-gray-500">
-                                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <div className="w-4 h-4 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
                                     <span className="text-sm">Loading more...</span>
                                 </div>
                             ) : hasMore && totalCount > 0 ? (
-                                <span className="text-sm text-gray-400">
+                                <span className="text-sm text-muted-foreground">
                                     Showing {loadedCount} of {totalCount} segments
                                 </span>
                             ) : null}
@@ -439,9 +433,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="flex items-center gap-2 mt-4 text-gray-500"
+                            className="flex items-center gap-2 mt-4 text-muted-foreground"
                         >
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                             <span className="text-sm">Listening...</span>
                         </motion.div>
                     )}

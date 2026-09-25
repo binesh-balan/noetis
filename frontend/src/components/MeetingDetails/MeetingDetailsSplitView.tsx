@@ -1,32 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { FileText, Sparkles } from 'lucide-react';
+import { FileText, Sparkles, type LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const STORAGE_KEY = 'noetis.meetingDetails.transcriptPaneRatio';
 const DEFAULT_RATIO = 0.3;
 const MIN_RATIO = 0.3;
 const MAX_RATIO = 0.5;
 
-const TABS = [
-  { value: 'transcript' as const, label: 'Transcript', icon: FileText },
-  { value: 'summary' as const, label: 'Summary', icon: Sparkles },
-];
 
-function readStoredRatio(): number {
-  if (typeof window === 'undefined') return DEFAULT_RATIO;
+function readStoredRatio(key: string, fallback: number, min: number, max: number): number {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     const n = raw == null ? NaN : Number(raw);
-    return Number.isFinite(n) && n >= MIN_RATIO && n <= MAX_RATIO ? n : DEFAULT_RATIO;
+    return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
   } catch {
-    return DEFAULT_RATIO;
+    return fallback;
   }
 }
 
-function writeStoredRatio(value: number): void {
+function writeStoredRatio(key: string, value: number): void {
   try {
-    localStorage.setItem(STORAGE_KEY, String(value));
+    localStorage.setItem(key, String(value));
   } catch {
     // Layout persistence is optional.
   }
@@ -39,6 +35,16 @@ interface MeetingDetailsSplitViewProps {
   summary: ReactNode;
   activeTab: MeetingDetailsTab;
   onTabChange: (tab: MeetingDetailsTab) => void;
+  /** Tab/region labels; the live Home view uses "Status" for the right pane. */
+  transcriptLabel?: string;
+  summaryLabel?: string;
+  /** Icon for the summary/status tab; the live Home view passes Activity instead of Sparkles. */
+  summaryIcon?: LucideIcon;
+  /** Split persistence/bounds; defaults are the meeting-details values. */
+  storageKey?: string;
+  defaultRatio?: number;
+  minRatio?: number;
+  maxRatio?: number;
 }
 
 export function MeetingDetailsSplitView({
@@ -46,16 +52,30 @@ export function MeetingDetailsSplitView({
   summary,
   activeTab,
   onTabChange,
+  transcriptLabel = 'Transcript',
+  summaryLabel = 'Summary',
+  summaryIcon = Sparkles,
+  storageKey = STORAGE_KEY,
+  defaultRatio = DEFAULT_RATIO,
+  minRatio = MIN_RATIO,
+  maxRatio = MAX_RATIO,
 }: MeetingDetailsSplitViewProps) {
+  const tabs = [
+    { value: 'transcript' as const, label: transcriptLabel, icon: FileText },
+    { value: 'summary' as const, label: summaryLabel, icon: summaryIcon },
+  ];
   const containerRef = useRef<HTMLDivElement>(null);
-  const [ratio, setRatio] = useState(DEFAULT_RATIO);
+  const [ratio, setRatio] = useState(defaultRatio);
   const [isDesktop, setIsDesktop] = useState(true);
   const dragging = useRef(false);
-  const clampRatio = (value: number) => Math.min(MAX_RATIO, Math.max(MIN_RATIO, value));
+  const clampRatio = useCallback(
+    (value: number) => Math.min(maxRatio, Math.max(minRatio, value)),
+    [minRatio, maxRatio]
+  );
 
   useEffect(() => {
-    setRatio(readStoredRatio());
-  }, []);
+    setRatio(readStoredRatio(storageKey, defaultRatio, minRatio, maxRatio));
+  }, [storageKey, defaultRatio, minRatio, maxRatio]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)');
@@ -75,36 +95,36 @@ export function MeetingDetailsSplitView({
     if (!dragging.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     setRatio(clampRatio((event.clientX - rect.left) / rect.width));
-  }, []);
+  }, [clampRatio]);
 
   const onPointerUp = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
     setRatio((current) => {
-      writeStoredRatio(current);
+      writeStoredRatio(storageKey, current);
       return current;
     });
-  }, []);
+  }, [storageKey]);
 
   const onSeparatorKeyDown = useCallback((event: React.KeyboardEvent) => {
     const current = ratio;
     const next =
       event.key === 'ArrowLeft' ? clampRatio(current - 0.05) :
       event.key === 'ArrowRight' ? clampRatio(current + 0.05) :
-      event.key === 'Home' ? MIN_RATIO :
-      event.key === 'End' ? MAX_RATIO :
+      event.key === 'Home' ? minRatio :
+      event.key === 'End' ? maxRatio :
       null;
     if (next === null) return;
     event.preventDefault();
     setRatio(next);
-    writeStoredRatio(next);
-  }, [ratio]);
+    writeStoredRatio(storageKey, next);
+  }, [ratio, clampRatio, minRatio, maxRatio, storageKey]);
 
   const transcriptPanelProps = isDesktop
-    ? { role: 'region' as const, 'aria-label': 'Transcript', tabIndex: -1 }
+    ? { role: 'region' as const, 'aria-label': transcriptLabel, tabIndex: -1 }
     : {};
   const summaryPanelProps = isDesktop
-    ? { role: 'region' as const, 'aria-label': 'Summary', tabIndex: -1 }
+    ? { role: 'region' as const, 'aria-label': summaryLabel, tabIndex: -1 }
     : {};
 
   return (
@@ -113,15 +133,15 @@ export function MeetingDetailsSplitView({
       onValueChange={(value) => onTabChange(value as MeetingDetailsTab)}
       className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
     >
-      <div className="shrink-0 bg-white px-2 md:hidden">
-        <TabsList className="relative h-auto w-full justify-center rounded-none border-b border-gray-200 bg-transparent p-0">
-          {TABS.map((tab) => {
+      <div className="shrink-0 bg-background px-2 md:hidden">
+        <TabsList className="relative h-auto w-full justify-center rounded-none border-b border-border bg-transparent p-0">
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="relative z-10 flex items-center gap-2 rounded-none border-0 bg-transparent px-6 py-4 text-gray-600 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none hover:text-gray-900"
+                className="relative z-10 flex items-center gap-2 rounded-none border-0 bg-transparent px-6 py-4 text-muted-foreground data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none hover:text-foreground"
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
@@ -150,16 +170,16 @@ export function MeetingDetailsSplitView({
           role="separator"
           aria-orientation="vertical"
           aria-valuenow={Math.round(ratio * 100)}
-          aria-valuemin={Math.round(MIN_RATIO * 100)}
-          aria-valuemax={Math.round(MAX_RATIO * 100)}
-          aria-valuetext={`Transcript panel ${Math.round(ratio * 100)} percent`}
-          aria-label="Resize transcript and summary"
+          aria-valuemin={Math.round(minRatio * 100)}
+          aria-valuemax={Math.round(maxRatio * 100)}
+          aria-valuetext={`${transcriptLabel} panel ${Math.round(ratio * 100)} percent`}
+          aria-label={`Resize ${transcriptLabel.toLowerCase()} and ${summaryLabel.toLowerCase()}`}
           tabIndex={0}
-          className="group relative z-10 hidden w-2 flex-shrink-0 cursor-col-resize items-stretch justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset md:flex"
+          className="group relative z-10 hidden w-2 flex-shrink-0 cursor-col-resize items-stretch justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:flex"
           onPointerDown={onPointerDown}
           onKeyDown={onSeparatorKeyDown}
         >
-          <div className="h-full w-px bg-gray-200 transition-[width,background-color] duration-150 ease-out group-hover:w-1 group-hover:bg-blue-400 group-active:w-1 group-active:bg-blue-500" />
+          <div className="h-full w-px bg-border transition-[width,background-color] duration-150 ease-out group-hover:w-1 group-hover:bg-primary group-active:w-1 group-active:bg-primary" />
         </div>
         <TabsContent
           value="summary"

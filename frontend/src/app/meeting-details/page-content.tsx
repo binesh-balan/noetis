@@ -190,8 +190,11 @@ export default function PageContent({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="flex flex-col h-screen min-w-0 bg-gray-50"
+      className="flex flex-col h-full min-w-0 bg-muted"
     >
+      <div className="flex h-11 items-center gap-2 border-b border-border bg-background px-4">
+        <h1 className="truncate text-sm font-semibold">{meetingData.meetingTitle}</h1>
+      </div>
       <div className="flex flex-1 min-w-0 overflow-hidden">
         <MeetingDetailsSplitView
           activeTab={activeTab}

@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useManagedPolicy } from '@/hooks/useManagedPolicy';
-import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
-import { motion } from 'framer-motion';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
 import { RecordingSettings } from '@/components/RecordingSettings';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
@@ -13,8 +12,8 @@ import { OrgAccountSettings } from '@/components/OrgAccountSettings';
 import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { BetaSettings } from '@/components/BetaSettings';
+import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { useConfig } from '@/contexts/ConfigContext';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 // Tabs configuration (constant)
 const TABS = [
@@ -23,20 +22,32 @@ const TABS = [
   { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
   { value: 'summaryModels', label: 'Summary', icon: SparkleIcon },
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { value: 'appearance', label: 'Appearance', icon: Palette },
   { value: 'beta', label: 'Beta', icon: FlaskConical }
 ] as const;
 
+// useSearchParams needs a Suspense boundary under static export.
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsContent() {
+  const tabParam = useSearchParams().get('tab');
   const router = useRouter();
   const { transcriptModelConfig, setTranscriptModelConfig } = useConfig();
   // Org-managed transcription: hide the tab entirely.
   const transcriptionManaged = useManagedPolicy()?.transcriptionManaged ?? false;
   const tabs = TABS.filter(t => !(transcriptionManaged && t.value === 'Transcriptionmodels'));
 
-  // Animation state for tabs
-  const [activeTab, setActiveTab] = useState('general');
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 });
+  // Deep link: /settings?tab=<value>. Re-sync when the param changes while mounted.
+  const [selectedTab, setActiveTab] = useState<string>(tabParam ?? 'general');
+  useEffect(() => { setActiveTab(tabParam ?? 'general'); }, [tabParam]);
+  // Unknown or policy-hidden tab (policy may load after mount) falls back to General.
+  const activeTab = tabs.some(t => t.value === selectedTab) ? selectedTab : 'general';
 
   // Load saved transcript configuration on mount
   useEffect(() => {
@@ -58,89 +69,39 @@ export default function SettingsPage() {
     loadTranscriptConfig();
   }, [setTranscriptModelConfig]);
 
-  // Update underline position when active tab changes
-  useLayoutEffect(() => {
-    const activeIndex = tabs.findIndex(tab => tab.value === activeTab);
-    const activeTabElement = tabRefs.current[activeIndex];
-
-    if (activeTabElement) {
-      const { offsetLeft, offsetWidth } = activeTabElement;
-      setUnderlineStyle({ left: offsetLeft, width: offsetWidth });
-    }
-  }, [activeTab, tabs]);
-
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
-      {/* Fixed Header */}
-      <div className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-8 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back</span>
-            </button>
-            <h1 className="text-3xl font-bold">Settings</h1>
-          </div>
-        </div>
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-8 pt-6">
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-transparent relative rounded-none border-b border-gray-200 p-0 h-auto">
-              {tabs.map((tab, index) => {
-                const Icon = tab.icon;
-                return (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    ref={el => { tabRefs.current[index] = el }}
-                    className="flex items-center gap-2 px-6 py-4 bg-transparent rounded-none border-0 data-[state=active]:bg-transparent data-[state=active]:text-blue-600 data-[state=active]:shadow-none text-gray-600 hover:text-gray-900 relative z-10"
-                  >
-                    <Icon className="w-4 h-4" />
-                    {tab.label}
-                  </TabsTrigger>
-                );
-              })}
-
-              <motion.div
-                className="absolute bottom-0 z-20 h-0.5 bg-blue-600"
-                layoutId="underline"
-                style={{ left: underlineStyle.left, width: underlineStyle.width }}
-                transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-              />
-            </TabsList>
-
-            <TabsContent value="general">
-              <OrgAccountSettings />
-              <PreferenceSettings />
-            </TabsContent>
-            <TabsContent value="recording">
-              <RecordingSettings />
-            </TabsContent>
-            <TabsContent value="Transcriptionmodels">
-              <TranscriptSettings
-                transcriptModelConfig={transcriptModelConfig}
-                setTranscriptModelConfig={setTranscriptModelConfig}
-              />
-            </TabsContent>
-            <TabsContent value="summaryModels">
-              <SummaryModelSettings />
-            </TabsContent>
-            <TabsContent value="templates" className="mt-6">
-              <TemplateSettings />
-            </TabsContent>
-            <TabsContent value="beta" className="mt-6">
-              <BetaSettings />
-            </TabsContent>
-          </Tabs>
+    <div className="flex h-full">
+      <nav aria-label="Settings sections" className="w-48 shrink-0 space-y-0.5 border-r border-border p-3">
+        <h1 className="px-2 pb-3 text-sm font-semibold">Settings</h1>
+        {tabs.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            onClick={() => {
+              setActiveTab(value);
+              router.replace('/settings?tab=' + value);
+            }}
+            aria-current={activeTab === value ? 'page' : undefined}
+            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              activeTab === value ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
+      </nav>
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl space-y-6 p-8">
+          {activeTab === 'general' && (<><OrgAccountSettings /><PreferenceSettings /></>)}
+          {activeTab === 'recording' && <RecordingSettings />}
+          {activeTab === 'Transcriptionmodels' && (
+            <TranscriptSettings transcriptModelConfig={transcriptModelConfig} setTranscriptModelConfig={setTranscriptModelConfig} />
+          )}
+          {activeTab === 'summaryModels' && <SummaryModelSettings />}
+          {activeTab === 'templates' && <TemplateSettings />}
+          {activeTab === 'beta' && <BetaSettings />}
+          {activeTab === 'appearance' && <AppearanceSettings />}
         </div>
       </div>
     </div>
   );
-};
+}

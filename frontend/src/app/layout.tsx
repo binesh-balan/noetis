@@ -1,9 +1,13 @@
 'use client'
 
 import './globals.css'
-import { Source_Sans_3 } from 'next/font/google'
+import { Inter } from 'next/font/google'
+import { THEME_BOOT_SCRIPT, useTheme } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
-import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
+import { SidebarProvider, useSidebar } from '@/components/Sidebar/SidebarProvider'
+import { CommandPalette } from '@/components/CommandPalette'
+import { useHotkeys } from '@/hooks/useHotkeys'
+import { useRouter } from 'next/navigation'
 import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
@@ -12,7 +16,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { RecordingStateProvider, useRecordingState } from '@/contexts/RecordingStateContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
@@ -27,11 +31,7 @@ import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
 
 
-const sourceSans3 = Source_Sans_3({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-source-sans-3',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 // Module-level component — stable reference across RootLayout re-renders.
 // Defined here (not inside RootLayout) so React never sees a new function type
@@ -58,6 +58,33 @@ function ConditionalImportDialog({
       onOpenChange={handleImportDialogClose}
       preselectedFile={importFilePath}
     />
+  );
+}
+
+// Module-level for the same reason as ConditionalImportDialog; must sit inside the providers.
+// Toaster follows the app's theme choice, not the OS.
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme()
+  return <Toaster position="bottom-center" richColors closeButton theme={resolvedTheme} />
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isRecording } = useRecordingState();
+  const { handleRecordingToggle, toggleCollapse } = useSidebar();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useHotkeys({
+    'mod+k': () => setPaletteOpen((o) => !o),
+    'mod+r': () => (isRecording ? router.push('/') : handleRecordingToggle()),
+    'mod+\\': () => toggleCollapse(),
+    'mod+,': () => router.push('/settings'),
+  });
+  return (
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <Sidebar />
+      <MainContent>{children}</MainContent>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
   );
 }
 
@@ -231,8 +258,11 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={`${sourceSans3.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
         <AnalyticsProvider>
           <RecordingStateProvider>
             <TranscriptProvider>
@@ -251,10 +281,7 @@ export default function RootLayout({
                               {showOnboarding ? (
                                 <OnboardingFlow onComplete={handleOnboardingComplete} />
                               ) : (
-                                <div className="flex">
-                                  <Sidebar />
-                                  <MainContent>{children}</MainContent>
-                                </div>
+                                <AppShell>{children}</AppShell>
                               )}
                               {/* Import audio overlay and dialog */}
                               <ImportDropOverlay visible={showDropOverlay} />
@@ -276,7 +303,7 @@ export default function RootLayout({
           </RecordingStateProvider>
         </AnalyticsProvider>
 
-        <Toaster position="bottom-center" richColors closeButton />
+        <ThemedToaster />
       </body>
     </html>
   )

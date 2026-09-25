@@ -83,7 +83,7 @@ export function TemplateSettings() {
       set({ sections: draft.sections.map((x, j) => (j === i ? { ...x, ...s } : x)) });
 
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm flex flex-col gap-4">
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm flex flex-col gap-4">
         <h3 className="text-lg font-semibold">{editing.isNew ? 'New template' : `Edit "${draft.name}"`}</h3>
         <label className="text-sm font-medium">Name
           <Input value={draft.name} onChange={e => set({ name: e.target.value })} placeholder="Client call" />
@@ -95,12 +95,12 @@ export function TemplateSettings() {
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Sections</p>
           {draft.sections.map((s, i) => (
-            <div key={i} className="rounded-md border border-gray-200 p-3 flex flex-col gap-2">
+            <div key={i} className="rounded-md border border-border p-3 flex flex-col gap-2">
               <div className="flex gap-2">
                 <Input aria-label="Section title" value={s.title} onChange={e => setSection(i, { title: e.target.value })} placeholder="Section title" />
                 <select
                   aria-label="Section format"
-                  className="rounded-md border border-gray-200 px-2 text-sm"
+                  className="rounded-md border border-border px-2 text-sm"
                   value={s.format}
                   onChange={e => setSection(i, { format: e.target.value as Section['format'] })}
                 >
@@ -131,23 +131,23 @@ export function TemplateSettings() {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+    <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold">Summary Templates</h3>
-          <p className="text-sm text-gray-600">Organization templates are managed by IT. Duplicate any template to customize it.</p>
+          <p className="text-sm text-muted-foreground">Organization templates are managed by IT. Duplicate any template to customize it.</p>
         </div>
         <Button onClick={startNew}>New template</Button>
       </div>
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-border">
         {templates.map(t => (
           <li key={t.id} className="py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="font-medium truncate">
                 {t.name}
-                <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{SOURCE_LABEL[t.source]}</span>
+                <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{SOURCE_LABEL[t.source]}</span>
               </p>
-              <p className="text-sm text-gray-600 truncate">{t.description}</p>
+              <p className="text-sm text-muted-foreground truncate">{t.description}</p>
             </div>
             <div className="flex gap-1 shrink-0">
               {t.source === 'custom' && <Button variant="ghost" size="sm" onClick={() => startEdit(t, false)}>Edit</Button>}
