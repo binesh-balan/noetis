@@ -133,6 +133,7 @@ pub async fn builtin_ai_download_model<R: Runtime>(
     state: State<'_, ModelManagerState>,
     model_name: String,
 ) -> Result<(), String> {
+    crate::policy::require_downloads_allowed()?;
     let manager = {
         // Ensure manager is initialized
         {

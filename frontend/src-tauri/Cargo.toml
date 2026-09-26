@@ -1,10 +1,10 @@
 [package]
-name = "meetily"
+name = "noetis"
 version = "0.4.1"
 description = "A Tauri App for meeting minutes"
 authors = ["Sujith S"]
 license = "MIT"
-repository = "https://github.com/Zackriya-Solutions/meeting-minutes"
+repository = "https://github.com/binesh-balan/noetis"
 edition = "2021"
 rust-version = "1.77"
 
@@ -147,6 +147,13 @@ ffmpeg-sidecar = { git = "https://github.com/nathanbabcock/ffmpeg-sidecar", bran
 
 sqlx = { version = "0.8", features = [ "runtime-tokio", "sqlite", "chrono"] }
 
+# SHA-256 verification of downloaded model/binary files (already used as a
+# build-dependency by build/onnxruntime.rs; promoted to a regular dependency here so
+# runtime download paths — whisper_engine.rs, parakeet_engine.rs,
+# summary/summary_engine/model_manager.rs — can pin against known-good hashes too. See
+# security/reports/07-ai-security.md §1,2,4.
+sha2 = "0.10"
+
 # Common Tauri configuration
 tauri = { version = "2.6.2", features = [ "macos-private-api", "protocol-asset", "tray-icon"] }
 tauri-plugin-fs = "2.4.0"
@@ -188,6 +195,8 @@ whisper-rs = { version = "0.13.2", features = ["raw-api", "metal", "coreml"] }
 whisper-rs = { version = "0.13.2", features = ["raw-api"] }
 ort = { version = "2.0.0-rc.10", features = ["load-dynamic"] }
 futures-channel = "0.3.31"
+winreg = "0.55"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_System_Com", "Win32_System_Ole", "Win32_System_Variant"] }
 
 # Linux-specific dependencies
 # Default: CPU-only build (no BLAS)
@@ -209,6 +218,13 @@ strsim = "0.10.0"
 futures = "0.3.31"
 tracing-subscriber = "0.3.16"
 
+# SECURITY NOTE (security/reports/01-inventory.md #1, 05-rust-security.md): as of this
+# commit, Cargo.lock does NOT reflect these two patches — cpal and esaxx-rs both resolve
+# to plain crates.io sources in the lockfile, not these git forks. This could mean either
+# the lockfile is stale (run `cargo update -p cpal -p esaxx-rs` to fix) or these patches
+# are dead and can be removed. Needs a `cargo build`/`cargo tree` pass to confirm which,
+# which wasn't possible in the environment this note was added from (no Rust toolchain
+# installed). Do not assume either direction without verifying.
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "51c3b43" }
 esaxx-rs = { git = "https://github.com/thewh1teagle/esaxx-rs.git", branch = "feat/dynamic-msvc-link" }

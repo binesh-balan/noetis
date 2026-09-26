@@ -137,6 +137,8 @@ pub struct MeetingTranscript {
     pub audio_end_time: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
 }
 
 /// Meeting metadata without transcripts (for pagination)
@@ -484,9 +486,11 @@ pub async fn api_get_model_config<R: Runtime>(
             match SettingsRepository::get_api_key(pool, &config.provider).await {
                 Ok(api_key) => {
                     log_info!("Successfully retrieved model config and API key.");
+                    let managed = crate::policy::managed_summary()?;
+                    let managed = managed.as_ref();
                     Ok(Some(ModelConfig {
-                        provider: config.provider,
-                        model: config.model,
+                        provider: managed.map_or(config.provider, |_| "custom-openai".into()),
+                        model: managed.map_or(config.model, |m| m.model.clone()),
                         whisper_model: config.whisper_model,
                         api_key,
                         ollama_endpoint: config.ollama_endpoint,
@@ -503,6 +507,17 @@ pub async fn api_get_model_config<R: Runtime>(
             }
         }
         Ok(None) => {
+            // Fresh install under a managed policy: report the org model as configured so
+            // the UI never prompts the user to pick one.
+            if let Some(cfg) = crate::policy::managed_summary()? {
+                return Ok(Some(ModelConfig {
+                    provider: "custom-openai".into(),
+                    model: cfg.model,
+                    whisper_model: crate::config::DEFAULT_WHISPER_MODEL.into(),
+                    api_key: None,
+                    ollama_endpoint: None,
+                }));
+            }
             log_warn!("⚠️ No model config found in database - database may be empty or settings table not initialized");
             Ok(None)
         }
@@ -532,6 +547,12 @@ pub async fn api_save_model_config<R: Runtime>(
         &ollama_endpoint
     );
     let pool = state.db_manager.pool();
+
+    // Managed policy: still persist the user's whisper model, but pin the summary model.
+    let (provider, model) = match crate::policy::managed_summary()? {
+        Some(cfg) => ("custom-openai".to_string(), cfg.model),
+        None => (provider, model),
+    };
 
     if let Err(e) = SettingsRepository::save_model_config(
         pool,
@@ -570,6 +591,18 @@ pub async fn api_save_model_config<R: Runtime>(
     )
 }
 
+// SECURITY NOTE: this command returns the stored provider API key in plaintext to
+// whatever JS calls it. There is currently no additional gate beyond the Tauri IPC
+// boundary itself (the `_auth_token` parameter below is accepted but not checked — no
+// session-token infrastructure exists to validate it against). This is the accepted
+// trust model for this app today: the webview and the Rust backend are treated as one
+// trust domain, consistent with how Tauri's own plugin capability system works (it
+// governs plugin commands, not custom #[tauri::command] functions like this one). The
+// key is still protected at rest (see `secure_storage::protect`) so a webview
+// compromise is the only way to reach this value — reading the SQLite file directly, or
+// copying the app's data directory elsewhere, no longer yields the plaintext key on
+// Windows. If a real per-session credential is ever introduced, wire it into
+// `_auth_token` and reject calls that don't present it.
 #[tauri::command]
 pub async fn api_get_api_key<R: Runtime>(
     _app: AppHandle<R>,
@@ -603,6 +636,9 @@ pub async fn api_get_transcript_config<R: Runtime>(
     _auth_token: Option<String>,
 ) -> Result<Option<TranscriptConfig>, String> {
     log_info!("api_get_transcript_config called (native)");
+    if let Some(t) = crate::policy::managed_transcription() {
+        return Ok(Some(TranscriptConfig { provider: t.provider, model: t.model, api_key: None }));
+    }
     let pool = state.db_manager.pool();
 
     match SettingsRepository::get_transcript_config(pool).await {
@@ -659,6 +695,10 @@ pub async fn api_save_transcript_config<R: Runtime>(
         "api_save_transcript_config called (native) for provider '{}'",
         &provider
     );
+    // Managed: the policy is authoritative; ignore UI writes (e.g. sidebar sync) silently.
+    if crate::policy::managed_transcription().is_some() {
+        return Ok(serde_json::json!({ "status": "managed", "message": "Transcription settings are managed by your organization" }));
+    }
     let pool = state.db_manager.pool();
 
     if let Err(e) = SettingsRepository::save_transcript_config(pool, &provider, &model).await {
@@ -683,6 +723,8 @@ pub async fn api_save_transcript_config<R: Runtime>(
     )
 }
 
+// SECURITY NOTE: same accepted trust model as `api_get_api_key` above — see that
+// comment. Key is protected at rest via `secure_storage::protect`.
 #[tauri::command]
 pub async fn api_get_transcript_api_key<R: Runtime>(
     _app: AppHandle<R>,
@@ -740,6 +782,48 @@ pub async fn api_delete_api_key<R: Runtime>(
     }
 }
 
+/// Reads the persisted Strict Offline Mode setting (security/RESIDUAL_RISKS.md #3).
+#[tauri::command]
+pub async fn api_get_strict_offline_mode<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<bool, String> {
+    SettingsRepository::get_strict_offline_mode(state.db_manager.pool())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Persists Strict Offline Mode and immediately updates the in-memory flag that
+/// generate_summary/the update checker actually read (network_policy), so the change
+/// takes effect without an app restart.
+#[tauri::command]
+pub async fn api_set_strict_offline_mode<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    SettingsRepository::set_strict_offline_mode(state.db_manager.pool(), enabled)
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::network_policy::set_strict_offline(enabled);
+    log_info!("Strict Offline Mode set to {}", enabled);
+    Ok(())
+}
+
+/// Clears every stored cloud provider API key in one action
+/// (security/RESIDUAL_RISKS.md #3 — previously no such action existed).
+#[tauri::command]
+pub async fn api_forget_all_api_keys<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    SettingsRepository::forget_all_api_keys(state.db_manager.pool())
+        .await
+        .map_err(|e| e.to_string())?;
+    log_info!("Cleared all stored provider API keys");
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn api_delete_meeting<R: Runtime>(
     _app: AppHandle<R>,
@@ -756,14 +840,44 @@ pub async fn api_delete_meeting<R: Runtime>(
     let pool = state.db_manager.pool();
 
     match MeetingsRepository::delete_meeting(pool, &meeting_id).await {
-        Ok(true) => {
+        Ok(Some(deleted)) => {
             log_info!("Successfully deleted meeting {}", meeting_id);
+
+            // The DB rows are gone; also remove the on-disk recording folder
+            // (audio.mp4/transcripts.json/metadata.json) so deleted meeting content
+            // doesn't linger indefinitely. Best-effort: a failure here shouldn't undo
+            // the already-committed DB deletion, just surface a warning.
+            if let Some(folder_path) = deleted.folder_path {
+                if !folder_path.is_empty() {
+                    let path = std::path::PathBuf::from(&folder_path);
+                    if path.exists() {
+                        match std::fs::remove_dir_all(&path) {
+                            Ok(()) => {
+                                log_info!(
+                                    "Removed recording folder for deleted meeting {}: {}",
+                                    meeting_id,
+                                    folder_path
+                                );
+                            }
+                            Err(e) => {
+                                log_warn!(
+                                    "Deleted meeting {} from database but failed to remove its recording folder {}: {}",
+                                    meeting_id,
+                                    folder_path,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             Ok(serde_json::json!({
                 "status": "success",
                 "message": "Meeting deleted successfully"
             }))
         }
-        Ok(false) => {
+        Ok(None) => {
             log_warn!("Meeting not found or already deleted: {}", meeting_id);
             Err(format!(
                 "Meeting not found or could not be deleted: {}",
@@ -878,6 +992,7 @@ pub async fn api_get_meeting_transcripts<R: Runtime>(
                     audio_start_time: t.audio_start_time,
                     audio_end_time: t.audio_end_time,
                     duration: t.duration,
+                    speaker: t.speaker,
                 })
                 .collect::<Vec<_>>();
 
@@ -1145,12 +1260,31 @@ pub async fn debug_backend_connection<R: Runtime>(app: AppHandle<R>) -> Result<S
     }
 }
 
+// SECURITY: this command is reachable from any JS running in the webview via
+// invoke('open_external_url', {url}), with `url` fully attacker-controlled from the IPC
+// caller's perspective. Every current call site passes a hardcoded literal, but nothing
+// enforces that. See security/reports/04-native-security.md §4 and
+// security/reports/05-rust-security.md §11.
 #[tauri::command]
 pub async fn open_external_url(url: String) -> Result<(), String> {
     use std::process::Command;
 
+    // Only allow http(s) destinations — rejects file://, javascript:-like schemes, and
+    // anything else that isn't "open a web page".
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("open_external_url only supports http:// and https:// URLs".to_string());
+    }
+
     let result = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(&["/C", "start", &url]).output()
+        // rundll32's url.dll,FileProtocolHandler opens a URL via ShellExecute without
+        // going through cmd.exe's own command-line parser. The previous
+        // `cmd /C start <url>` construction handed `url` to cmd.exe's tokenizer, which
+        // re-interprets `&`, `|`, `^`, `%` regardless of how the argv was originally
+        // split — a classic Windows command-injection vector if this string is ever
+        // attacker-influenced.
+        Command::new("rundll32")
+            .args(&["url.dll,FileProtocolHandler", &url])
+            .output()
     } else if cfg!(target_os = "macos") {
         Command::new("open").arg(&url).output()
     } else {
@@ -1162,6 +1296,74 @@ pub async fn open_external_url(url: String) -> Result<(), String> {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("Failed to open URL: {}", e)),
     }
+}
+
+/// Exports text content (a meeting summary) to a user-chosen location via a native save
+/// dialog, instead of a browser-style Blob download to a fixed/predictable location. See
+/// security/reports/08-data-protection.md §13: the frontend previously synthesized a
+/// `<a download>` click, which in the Tauri webview resolves to the OS/browser default
+/// download folder rather than letting the user pick where the export goes. Returns
+/// `Ok(false)` (not an error) if the user cancels the dialog.
+#[tauri::command]
+pub async fn export_text_content<R: Runtime>(
+    app: AppHandle<R>,
+    content: String,
+    suggested_filename: String,
+    extension: String,
+) -> Result<bool, String> {
+    save_via_dialog(&app, content.as_bytes(), &suggested_filename, &extension)
+}
+
+/// Same as `export_text_content`, for generated binary documents (PDF, DOCX).
+#[tauri::command]
+pub async fn export_binary_content<R: Runtime>(
+    app: AppHandle<R>,
+    content: Vec<u8>,
+    suggested_filename: String,
+    extension: String,
+) -> Result<bool, String> {
+    save_via_dialog(&app, &content, &suggested_filename, &extension)
+}
+
+/// Shows a native save dialog and writes `content` to the chosen path.
+/// Returns `Ok(false)` if the user cancelled.
+fn save_via_dialog<R: Runtime>(
+    app: &AppHandle<R>,
+    content: &[u8],
+    suggested_filename: &str,
+    extension: &str,
+) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let filter_label = if extension.is_empty() {
+        "File".to_string()
+    } else {
+        extension.to_uppercase()
+    };
+    let filter_extensions: Vec<&str> = if extension.is_empty() {
+        vec!["*"]
+    } else {
+        vec![extension]
+    };
+
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(suggested_filename)
+        .add_filter(&filter_label, &filter_extensions)
+        .blocking_save_file();
+
+    let path = match file_path {
+        Some(path) => path,
+        None => return Ok(false), // user cancelled the dialog
+    };
+
+    let path_str = path.to_string();
+    std::fs::write(&path_str, content)
+        .map_err(|e| format!("Failed to write export file: {}", e))?;
+
+    log_info!("Exported content to {}", path_str);
+    Ok(true)
 }
 
 // ===== CUSTOM OPENAI API COMMANDS =====
@@ -1184,6 +1386,10 @@ pub async fn api_save_custom_openai_config<R: Runtime>(
         &endpoint,
         &model
     );
+
+    if crate::policy::managed_summary()?.is_some() {
+        return Err(crate::policy::MANAGED_ERROR.to_string());
+    }
 
     // Validate required fields
     if endpoint.trim().is_empty() {
@@ -1248,6 +1454,11 @@ pub async fn api_get_custom_openai_config<R: Runtime>(
     state: tauri::State<'_, AppState>,
 ) -> Result<Option<CustomOpenAIConfig>, String> {
     log_info!("api_get_custom_openai_config called");
+
+    // The org key stays in Rust; the webview only needs endpoint/model for display.
+    if let Some(cfg) = crate::policy::managed_summary()? {
+        return Ok(Some(CustomOpenAIConfig { api_key: None, ..cfg }));
+    }
 
     let pool = state.db_manager.pool();
 
@@ -1315,7 +1526,11 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
 
     // Add authorization if API key provided
     if let Some(key) = api_key.filter(|k| !k.trim().is_empty()) {
-        request = request.header("Authorization", format!("Bearer {}", key));
+        request = if crate::summary::llm_client::is_azure_endpoint(&url) {
+            request.header("api-key", key)
+        } else {
+            request.header("Authorization", format!("Bearer {}", key))
+        };
     }
 
     match request.send().await {

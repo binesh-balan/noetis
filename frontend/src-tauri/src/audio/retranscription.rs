@@ -139,7 +139,7 @@ pub async fn start_retranscription<R: Runtime>(
 
 /// Find audio file in meeting folder
 /// Tries common names first, then scans for any file with an audio extension
-fn find_audio_file(folder: &Path) -> Result<PathBuf> {
+pub(crate) fn find_audio_file(folder: &Path) -> Result<PathBuf> {
     let candidates = [
         "audio.mp4", "audio.m4a", "audio.wav", "audio.mp3",
         "audio.flac", "audio.ogg", "recording.mp4",
@@ -786,6 +786,11 @@ pub async fn start_retranscription_command<R: Runtime>(
     model: Option<String>,
     provider: Option<String>,
 ) -> Result<RetranscriptionStarted, String> {
+    // Org policy pins provider/model/language regardless of what the dialog sent.
+    let (language, model, provider) = match crate::policy::managed_transcription() {
+        Some(t) => (t.language.or(language), Some(t.model), Some(t.provider)),
+        None => (language, model, provider),
+    };
 
     // Check if retranscription is already in progress (guard will be acquired in start_retranscription)
     if RETRANSCRIPTION_IN_PROGRESS.load(Ordering::SeqCst) {

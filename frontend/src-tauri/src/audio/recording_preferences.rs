@@ -23,6 +23,9 @@ pub struct RecordingPreferences {
     #[cfg(target_os = "macos")]
     #[serde(default)]
     pub system_audio_backend: Option<String>,
+    /// Windows meeting detection: "off" | "ask" | "auto" (see `meeting_detector`).
+    #[serde(default = "default_meeting_detection")]
+    pub meeting_detection: String,
 }
 
 impl Default for RecordingPreferences {
@@ -35,44 +38,49 @@ impl Default for RecordingPreferences {
             preferred_system_device: None,
             #[cfg(target_os = "macos")]
             system_audio_backend: Some("coreaudio".to_string()),
+            meeting_detection: default_meeting_detection(),
         }
     }
+}
+
+fn default_meeting_detection() -> String {
+    "ask".to_string()
 }
 
 /// Get the default recordings folder based on platform
 pub fn get_default_recordings_folder() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
-        // Windows: %USERPROFILE%\Music\meetily-recordings
+        // Windows: %USERPROFILE%\Music\noetis-recordings
         if let Some(music_dir) = dirs::audio_dir() {
-            music_dir.join("meetily-recordings")
+            music_dir.join("noetis-recordings")
         } else {
             // Fallback to Documents if Music folder is not available
             dirs::document_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+                .join("noetis-recordings")
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: ~/Movies/meetily-recordings
+        // macOS: ~/Movies/noetis-recordings
         if let Some(movies_dir) = dirs::video_dir() {
-            movies_dir.join("meetily-recordings")
+            movies_dir.join("noetis-recordings")
         } else {
             // Fallback to Documents if Movies folder is not available
             dirs::document_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("meetily-recordings")
+                .join("noetis-recordings")
         }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        // Linux/Others: ~/Documents/meetily-recordings
+        // Linux/Others: ~/Documents/noetis-recordings
         dirs::document_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("meetily-recordings")
+            .join("noetis-recordings")
     }
 }
 
@@ -382,6 +390,19 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
             name: "ScreenCaptureKit".to_string(),
             description: "Default system audio capture".to_string(),
         }])
+    }
+}
+
+#[cfg(test)]
+mod meeting_detection_tests {
+    use super::*;
+
+    #[test]
+    fn old_preferences_default_to_ask() {
+        let old = r#"{"save_folder":"C:/x","auto_save":true,"file_format":"mp4"}"#;
+        let p: RecordingPreferences = serde_json::from_str(old).unwrap();
+        assert_eq!(p.meeting_detection, "ask");
+        assert_eq!(RecordingPreferences::default().meeting_detection, "ask");
     }
 }
 

@@ -1,18 +1,22 @@
 'use client'
 
 import './globals.css'
-import { Source_Sans_3 } from 'next/font/google'
+import { Inter } from 'next/font/google'
+import { THEME_BOOT_SCRIPT, useTheme } from '@/hooks/useTheme'
 import Sidebar from '@/components/Sidebar'
-import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
+import { SidebarProvider, useSidebar } from '@/components/Sidebar/SidebarProvider'
+import { CommandPalette } from '@/components/CommandPalette'
+import { useHotkeys } from '@/hooks/useHotkeys'
+import { useRouter } from 'next/navigation'
 import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { RecordingStateProvider } from '@/contexts/RecordingStateContext'
+import { RecordingStateProvider, useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
@@ -27,11 +31,7 @@ import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
 
 
-const sourceSans3 = Source_Sans_3({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-source-sans-3',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 // Module-level component — stable reference across RootLayout re-renders.
 // Defined here (not inside RootLayout) so React never sees a new function type
@@ -58,6 +58,87 @@ function ConditionalImportDialog({
       onOpenChange={handleImportDialogClose}
       preselectedFile={importFilePath}
     />
+  );
+}
+
+// Module-level for the same reason as ConditionalImportDialog; must sit inside the providers.
+// Toaster follows the app's theme choice, not the OS.
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme()
+  return <Toaster position="bottom-center" richColors closeButton theme={resolvedTheme} />
+}
+
+// The meeting detector (meeting_detector::start_recording) asks to record a meeting. Wait for the
+// previous recording's stop/transcribe/save to finish, then start through the sidebar's
+// client-side path, so nothing in flight is reloaded away. Mounted during onboarding too.
+function DetectorStartListener({ showOnboarding }: { showOnboarding: boolean }) {
+  const { isRecording, status } = useRecordingState();
+  const { handleRecordingToggle } = useSidebar();
+  const latest = useRef({ showOnboarding, handleRecordingToggle, busy: false });
+  latest.current = {
+    showOnboarding,
+    handleRecordingToggle,
+    busy: isRecording || (status !== RecordingStatus.IDLE && status !== RecordingStatus.ERROR),
+  };
+
+  useEffect(() => {
+    const unlisten = listen<string>('detector-start-recording', async ({ payload: title }) => {
+      // Also clears the detector's ownership of this (not started) recording.
+      const reveal = () => invoke('reveal_main_window').catch(() => undefined);
+      if (latest.current.showOnboarding) {
+        toast.error('Please complete setup first', {
+          description: 'Finish onboarding before meetings can be recorded.'
+        });
+        return reveal();
+      }
+      const deadline = Date.now() + 3 * 60_000;
+      // ponytail: polls a ref every 500 ms (up to 3 min); fine because this listener lives in the
+      // root layout and never unmounts. Subscribe to status changes if more waiters appear.
+      while (latest.current.busy) {
+        if (Date.now() > deadline) {
+          toast.error("Couldn't record the meeting", {
+            description: 'The previous recording was still being processed.'
+          });
+          return reveal();
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      // The call may have ended (or the start been disowned) while we waited.
+      if (!(await invoke<boolean>('detector_start_pending').catch(() => false))) return;
+      if (latest.current.busy) {
+        // Something else started recording meanwhile; nothing to reveal.
+        invoke('disown_detector_start').catch(() => undefined);
+        return;
+      }
+      sessionStorage.setItem('autoStartMeetingName', title);
+      sessionStorage.setItem('autoStartSource', 'detector');
+      latest.current.handleRecordingToggle();
+    });
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, []);
+
+  return null;
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isRecording } = useRecordingState();
+  const { handleRecordingToggle, toggleCollapse } = useSidebar();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useHotkeys({
+    'mod+k': () => setPaletteOpen((o) => !o),
+    'mod+r': () => (isRecording ? router.push('/') : handleRecordingToggle()),
+    'mod+\\': () => toggleCollapse(),
+    'mod+,': () => router.push('/settings'),
+  });
+  return (
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <Sidebar />
+      <MainContent>{children}</MainContent>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
   );
 }
 
@@ -231,8 +312,11 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={`${sourceSans3.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
         <AnalyticsProvider>
           <RecordingStateProvider>
             <TranscriptProvider>
@@ -246,15 +330,13 @@ export default function RootLayout({
                             <ImportDialogProvider onOpen={handleOpenImportDialog}>
                               {/* Download progress toast provider - listens for background downloads */}
                               <DownloadProgressToastProvider />
+                              <DetectorStartListener showOnboarding={showOnboarding} />
 
                               {/* Show onboarding or main app */}
                               {showOnboarding ? (
                                 <OnboardingFlow onComplete={handleOnboardingComplete} />
                               ) : (
-                                <div className="flex">
-                                  <Sidebar />
-                                  <MainContent>{children}</MainContent>
-                                </div>
+                                <AppShell>{children}</AppShell>
                               )}
                               {/* Import audio overlay and dialog */}
                               <ImportDropOverlay visible={showDropOverlay} />
@@ -276,7 +358,7 @@ export default function RootLayout({
           </RecordingStateProvider>
         </AnalyticsProvider>
 
-        <Toaster position="bottom-center" richColors closeButton />
+        <ThemedToaster />
       </body>
     </html>
   )

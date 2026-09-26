@@ -21,6 +21,8 @@ import {
   SummaryLanguageStorage,
 } from '@/lib/summary-language-preferences';
 import { hasVisibleSummaryContent } from '@/lib/summary-content';
+import type { ExportFormat } from '@/lib/export-document';
+import { toolbarButtonClass } from './TranscriptButtonGroup';
 
 interface SummaryPanelProps {
   meeting: {
@@ -34,6 +36,7 @@ interface SummaryPanelProps {
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
+  onExport: (format: ExportFormat, includeTranscript: boolean) => Promise<void>;
   aiSummary: MeetingSummary | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   transcripts: Transcript[];
@@ -64,6 +67,7 @@ export function SummaryPanel({
   isSaving,
   onSaveAll,
   onCopySummary,
+  onExport,
   aiSummary,
   summaryStatus,
   transcripts,
@@ -217,14 +221,15 @@ export function SummaryPanel({
     <Popover open={langPickerOpen} onOpenChange={setLangPickerOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className={toolbarButtonClass}
           title={`Summary language: ${effectiveLangLabel}${isLocalFallbackLanguage ? ' (saved on this device)' : ''}`}
           aria-label="Set summary language"
         >
-          <Languages size={18} />
+          <Languages />
           <span className="hidden @[40rem]:inline">{effectiveLangLabel}</span>
-          <ChevronDown size={14} className="text-gray-400" />
+          <ChevronDown className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -242,10 +247,11 @@ export function SummaryPanel({
   );
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden h-full w-full @container">
+    <div className="flex-1 min-w-0 flex flex-col bg-background overflow-hidden h-full w-full @container">
       {/* Top-level actions — always visible, same pattern as TranscriptPanel */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-center w-full min-w-0 gap-2 flex-wrap">
+      <div className="flex min-h-11 items-center gap-2 border-b border-border px-4">
+        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Summary</h2>
+        <div className="ml-auto flex min-w-0 items-center gap-2 flex-wrap justify-end">
           <div className="flex-shrink-0 min-w-0">
             <SummaryGeneratorButtonGroup
               modelConfig={modelConfig}
@@ -273,6 +279,7 @@ export function SummaryPanel({
                 isDirty={isSummaryDirty}
                 onSave={onSaveAll}
                 onCopy={onCopySummary}
+                onExport={onExport}
               />
             </div>
           )}
@@ -282,8 +289,8 @@ export function SummaryPanel({
       {isSummaryLoading ? (
         <div className="flex items-center justify-center flex-1">
           <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-gray-600">Generating AI Summary...</p>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Generating AI Summary...</p>
           </div>
         </div>
       ) : !hasSummary ? (
@@ -295,7 +302,7 @@ export function SummaryPanel({
         />
       ) : (
         <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0">
-          <div className="p-6 w-full">
+          <div className="p-4 w-full">
             <BlockNoteSummaryView
               ref={summaryRef}
               summaryData={aiSummary}
@@ -316,9 +323,9 @@ export function SummaryPanel({
             />
           </div>
           {summaryStatus !== 'idle' && (
-            <div className={`mt-4 p-4 rounded-lg ${summaryStatus === 'error' ? 'bg-red-100 text-red-700' :
-              summaryStatus === 'completed' ? 'bg-green-100 text-green-700' :
-                'bg-blue-100 text-blue-700'
+            <div className={`mt-4 p-4 rounded-lg ${summaryStatus === 'error' ? 'bg-destructive/10 text-destructive' :
+              summaryStatus === 'completed' ? 'bg-success/10 text-success' :
+                'bg-primary/10 text-primary'
               }`}>
               <p className="text-sm font-medium">{getSummaryStatusMessage(summaryStatus)}</p>
             </div>

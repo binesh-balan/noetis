@@ -64,19 +64,12 @@ fn find_ffmpeg_path_internal() -> Option<PathBuf> {
         }
     }
 
-    // Check in current working directory
-    if let Ok(cwd) = std::env::current_dir() {
-        debug!("Current working directory: {:?}", cwd);
-        let ffmpeg_in_cwd = cwd.join(EXECUTABLE_NAME);
-        if ffmpeg_in_cwd.is_file() && ffmpeg_in_cwd.exists() {
-            debug!(
-                "Found ffmpeg in current working directory: {:?}",
-                ffmpeg_in_cwd
-            );
-            return Some(ffmpeg_in_cwd);
-        }
-        debug!("ffmpeg not found in current working directory");
-    }
+    // NOTE: a current-working-directory lookup used to live here. It was removed as a
+    // PATH/CWD binary-hijack hardening measure (security/reports/04-native-security.md
+    // §4,6): the app could be launched from an arbitrary CWD (a Downloads folder, a USB
+    // drive) that an attacker controls, and a planted `ffmpeg`/`ffmpeg.exe` there would
+    // silently be trusted and executed. The bundled-binary and PATH checks above/below
+    // are trusted locations; an arbitrary CWD is not.
 
     // Check in the same folder as the executable
     if let Ok(exe_path) = std::env::current_exe() {

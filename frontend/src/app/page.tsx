@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Activity } from 'lucide-react';
 import { RecordingControls } from '@/components/RecordingControls';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { usePermissionCheck } from '@/hooks/usePermissionCheck';
@@ -11,6 +12,10 @@ import { StatusOverlays } from '@/app/_components/StatusOverlays';
 import Analytics from '@/lib/analytics';
 import { SettingsModals } from './_components/SettingsModal';
 import { TranscriptPanel } from './_components/TranscriptPanel';
+import { HomeIdle } from './_components/HomeIdle';
+import { LiveStatusPane } from './_components/LiveStatusPane';
+import { RecordingBar } from './_components/RecordingBar';
+import { MeetingDetailsSplitView, type MeetingDetailsTab } from '@/components/MeetingDetails/MeetingDetailsSplitView';
 import { useModalState } from '@/hooks/useModalState';
 import { useRecordingStateSync } from '@/hooks/useRecordingStateSync';
 import { useRecordingStart } from '@/hooks/useRecordingStart';
@@ -26,6 +31,7 @@ export default function Home() {
   const [isRecording, setIsRecordingState] = useState(false);
   const [barHeights, setBarHeights] = useState(['58%', '76%', '58%']);
   const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
+  const [liveTab, setLiveTab] = useState<MeetingDetailsTab>('transcript');
 
   // Use contexts for state management
   const { meetingTitle } = useTranscripts();
@@ -37,7 +43,7 @@ export default function Home() {
 
   // Hooks
   const { hasMicrophone } = usePermissionCheck();
-  const { setIsMeetingActive, isCollapsed: sidebarCollapsed, refetchMeetings } = useSidebar();
+  const { setIsMeetingActive, refetchMeetings } = useSidebar();
   const { modals, messages, showModal, hideModal } = useModalState(transcriptModelConfig);
   const { isRecordingDisabled, setIsRecordingDisabled } = useRecordingStateSync(isRecording, setIsRecordingState, setIsMeetingActive);
   const { handleRecordingStart } = useRecordingStart(isRecording, setIsRecordingState, showModal);
@@ -188,8 +194,34 @@ export default function Home() {
   // Computed values using global status
   const isProcessingStop = status === RecordingStatus.PROCESSING_TRANSCRIPTS || isProcessing;
 
+  const showControls = (hasMicrophone || isRecording) &&
+    status !== RecordingStatus.PROCESSING_TRANSCRIPTS && status !== RecordingStatus.SAVING;
+  // STARTING is deliberately excluded: the start runs inside the idle view's RecordingControls
+  // instance, which must stay mounted to show its device-error alert if the start fails.
+  const sessionActive = recordingState.isRecording || isProcessingStop ||
+    status === RecordingStatus.STOPPING || status === RecordingStatus.SAVING || status === RecordingStatus.COMPLETED;
+
+  // One element, rendered in HomeIdle (start button) or the RecordingBar (pause/stop).
+  const controls = showControls ? (
+    <RecordingControls
+      isRecording={recordingState.isRecording}
+      onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}
+      onRecordingStart={handleRecordingStart}
+      onTranscriptReceived={() => { }} // Not actually used by RecordingControls
+      onStopInitiated={() => setIsStopping(true)}
+      barHeights={barHeights}
+      onTranscriptionError={(message) => {
+        showModal('errorAlert', message);
+      }}
+      isRecordingDisabled={isRecordingDisabled}
+      isParentProcessing={isProcessingStop}
+      selectedDevices={selectedDevices}
+      meetingName={meetingTitle}
+    />
+  ) : null;
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex h-full flex-col bg-background">
       {/* All Modals supported*/}
       <SettingsModals
         modals={modals}
@@ -206,54 +238,31 @@ export default function Home() {
         onDelete={deleteRecoverableMeeting}
         onLoadPreview={loadMeetingTranscripts}
       />
-      <div className="flex flex-1 overflow-hidden">
-        <TranscriptPanel
-          isProcessingStop={isProcessingStop}
-          isStopping={isStopping}
-          showModal={showModal}
-        />
-
-        {/* Recording controls - only show when permissions are granted or already recording and not showing status messages */}
-        {(hasMicrophone || isRecording) &&
-          status !== RecordingStatus.PROCESSING_TRANSCRIPTS &&
-          status !== RecordingStatus.SAVING && (
-            <div className="fixed bottom-12 left-0 right-0 z-10">
-              <div
-                className="flex justify-center pl-8 transition-[margin] duration-300"
-                style={{
-                  marginLeft: sidebarCollapsed ? '4rem' : '16rem'
-                }}
-              >
-                <div className="w-2/3 max-w-[750px] flex justify-center">
-                  <div className="bg-white rounded-full shadow-lg flex items-center">
-                    <RecordingControls
-                      isRecording={recordingState.isRecording}
-                      onRecordingStop={(callApi = true) => handleRecordingStop(callApi)}
-                      onRecordingStart={handleRecordingStart}
-                      onTranscriptReceived={() => { }} // Not actually used by RecordingControls
-                      onStopInitiated={() => setIsStopping(true)}
-                      barHeights={barHeights}
-                      onTranscriptionError={(message) => {
-                        showModal('errorAlert', message);
-                      }}
-                      isRecordingDisabled={isRecordingDisabled}
-                      isParentProcessing={isProcessingStop}
-                      selectedDevices={selectedDevices}
-                      meetingName={meetingTitle}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-        {/* Status Overlays - Processing and Saving */}
-        <StatusOverlays
-          isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
-          isSaving={status === RecordingStatus.SAVING}
-          sidebarCollapsed={sidebarCollapsed}
-        />
+      <div className="flex min-h-0 flex-1 flex-col">
+        {sessionActive ? (
+          <MeetingDetailsSplitView
+            transcript={<TranscriptPanel isProcessingStop={isProcessingStop} isStopping={isStopping} showModal={showModal} />}
+            summary={<LiveStatusPane />}
+            activeTab={liveTab}
+            onTabChange={setLiveTab}
+            summaryLabel="Status"
+            summaryIcon={Activity}
+            storageKey="noetis.live.transcriptPaneRatio"
+            defaultRatio={0.65}
+            minRatio={0.5}
+            maxRatio={0.8}
+          />
+        ) : (
+          <HomeIdle startControl={controls} />
+        )}
       </div>
+
+      {/* Processing / saving strip */}
+      <StatusOverlays
+        isProcessing={status === RecordingStatus.PROCESSING_TRANSCRIPTS && !recordingState.isRecording}
+        isSaving={status === RecordingStatus.SAVING}
+      />
+      {(recordingState.isRecording || status === RecordingStatus.STOPPING) && controls && <RecordingBar>{controls}</RecordingBar>}
     </div>
   );
 }

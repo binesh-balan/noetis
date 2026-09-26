@@ -1,6 +1,7 @@
 "use client";
 
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,8 @@ import {
 import { Sparkles, Settings, Loader2, FileText, Check, Square } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { useState, useEffect, ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import { toolbarButtonClass, toolbarButtonPrimaryClass } from './TranscriptButtonGroup';
 
 interface SummaryGeneratorButtonGroupProps {
   languageSlot?: ReactNode;
@@ -56,6 +59,7 @@ export function SummaryGeneratorButtonGroup({
   languageSlot
 }: SummaryGeneratorButtonGroupProps) {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const summaryManaged = useManagedPolicy()?.summaryManaged ?? false;
 
   // Expose the function to open the modal via callback registration
   useEffect(() => {
@@ -85,23 +89,23 @@ export function SummaryGeneratorButtonGroup({
       {/* Generate Summary or Stop button */}
       {isGenerating ? (
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 border-red-200 px-3 gap-2"
+          className={cn(toolbarButtonClass, 'border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive')}
           onClick={() => {
             Analytics.trackButtonClick('stop_summary_generation', 'meeting_details');
             onStopGeneration();
           }}
           title="Stop summary generation"
         >
-          <Square size={18} fill="currentColor" />
+          <Square fill="currentColor" />
           <span className="hidden @[24rem]:inline">Stop</span>
         </Button>
       ) : (
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200 px-3 gap-2"
+          className={cn(toolbarButtonClass, toolbarButtonPrimaryClass)}
           onClick={() => {
             Analytics.trackButtonClick('generate_summary', 'meeting_details');
             void onGenerateSummary(customPrompt);
@@ -115,12 +119,12 @@ export function SummaryGeneratorButtonGroup({
         >
           {isModelConfigLoading ? (
             <>
-              <Loader2 className="animate-spin" size={18} />
+              <Loader2 className="animate-spin" />
               <span className="hidden @[24rem]:inline">Processing...</span>
             </>
           ) : (
             <>
-              <Sparkles size={18} />
+              <Sparkles />
               <span className="hidden @[24rem]:inline">{hasSummary ? 'Regenerate Summary' : 'Generate Summary'}</span>
             </>
           )}
@@ -129,12 +133,13 @@ export function SummaryGeneratorButtonGroup({
 
       {languageSlot}
 
-      {/* Settings button */}
-      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+      {/* Settings button (hidden when the organization manages the model) */}
+      {!summaryManaged && <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
         <DialogTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
+            className={cn(toolbarButtonClass)}
             title="Summary Settings"
           >
             <Settings />
@@ -158,15 +163,16 @@ export function SummaryGeneratorButtonGroup({
             layout="dialog"
           />
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       {/* Template selector dropdown */}
       {availableTemplates.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
+              className={cn(toolbarButtonClass)}
               title="Select summary template"
             >
               <FileText />
@@ -183,7 +189,7 @@ export function SummaryGeneratorButtonGroup({
               >
                 <span>{template.name}</span>
                 {selectedTemplate === template.id && (
-                  <Check className="h-4 w-4 text-green-600" />
+                  <Check className="h-4 w-4 text-success" />
                 )}
               </DropdownMenuItem>
             ))}

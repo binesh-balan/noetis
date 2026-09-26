@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::collections::VecDeque;
 use tokio::sync::mpsc;
@@ -16,7 +17,7 @@ use super::vad::{ContinuousVadProcessor};
 /// How long a silence must last before the VAD closes a speech segment, and
 /// therefore how long the audio clips handed to the ASR engine are.
 ///
-/// Live-path policy: 500ms (matches the established Meetily Pro live policy).
+/// Live-path policy: 500ms.
 /// The batch paths (`import.rs` / `retranscription.rs`) use 2000ms instead —
 /// they have no latency requirement, so they optimize purely for ASR request
 /// length. The live path cannot: with continuous audio (e.g. a podcast played
@@ -60,14 +61,16 @@ impl AudioMixerRingBuffer {
     }
 
     fn add_samples(&mut self, device_type: DeviceType, samples: Vec<f32>) {
-        // Log buffer health periodically for diagnostics
-        static mut SAMPLE_COUNTER: u64 = 0;
-        unsafe {
-            SAMPLE_COUNTER += 1;
-            if SAMPLE_COUNTER % 200 == 0 {
-                debug!("📊 Ring buffer status: mic={} samples, sys={} samples (max={})",
-                       self.mic_buffer.len(), self.system_buffer.len(), self.max_buffer_size);
-            }
+        // Log buffer health periodically for diagnostics. This was a `static mut` before
+        // (security/reports/05-rust-security.md §1,9) — an unsynchronized process-global
+        // counter is UB if this method is ever called concurrently from more than one
+        // AudioMixerRingBuffer instance. AtomicU64 gives the same "roughly every 200
+        // calls" diagnostic cadence with no soundness issue.
+        static SAMPLE_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let count = SAMPLE_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+        if count % 200 == 0 {
+            debug!("📊 Ring buffer status: mic={} samples, sys={} samples (max={})",
+                   self.mic_buffer.len(), self.system_buffer.len(), self.max_buffer_size);
         }
 
         match device_type {

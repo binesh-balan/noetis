@@ -475,6 +475,12 @@ pub async fn api_process_transcript<R: Runtime>(
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
+    // Org policy overrides whatever provider/model the UI sent.
+    let (model, model_name) = match crate::policy::managed_summary()? {
+        Some(cfg) => ("custom-openai".to_string(), cfg.model),
+        None => (model, model_name),
+    };
+
     let m_id = meeting_id.unwrap_or_else(|| format!("meeting-{}", Uuid::new_v4()));
     log_info!(
         "api_process_transcript (native) called for meeting_id: {}, model: {}",

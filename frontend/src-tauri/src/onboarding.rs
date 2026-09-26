@@ -132,6 +132,10 @@ pub async fn reset_onboarding_status<R: Runtime>(
 pub async fn get_onboarding_status<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Option<OnboardingStatus>, String> {
+    // Managed installs are set up by IT (models supplied, settings pinned): no onboarding.
+    if crate::policy::managed_transcription().is_some() {
+        return Ok(Some(OnboardingStatus { completed: true, current_step: 4, ..Default::default() }));
+    }
     let status = load_onboarding_status(&app)
         .await
         .map_err(|e| format!("Failed to load onboarding status: {}", e))?;
