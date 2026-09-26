@@ -127,6 +127,43 @@ pub async fn forget_voice(pool: &SqlitePool, name: &str) -> sqlx::Result<u64> {
     Ok(sqlx::query("DELETE FROM voice_samples WHERE label = ?").bind(name).execute(pool).await?.rows_affected())
 }
 
+/// Cosine at or above which a meeting speaker is given a known voice's name.
+/// ponytail: calibration knob; stricter than in-meeting clustering (0.40) because a wrong
+/// name is worse than "Speaker 3". Re-check with diarization's `real_voice_matching`.
+pub const VOICE_MATCH_THRESHOLD: f32 = 0.55;
+/// Speakers with less speech than this aren't stored (short samples make unreliable voiceprints).
+pub const MIN_SAMPLE_SECS: f64 = 20.0;
+
+/// Fills unnamed speakers with known voices: greedy one-to-one on cosine (inputs are
+/// L2-normalised, so dot product), best pairs first, skipping names already used.
+pub fn match_voices(centroids: &[Vec<f32>], names: &mut [Option<String>], profiles: &[(String, Vec<f32>)], threshold: f32) {
+    let mut pairs: Vec<(f32, usize, usize)> = Vec::new();
+    for (s, c) in centroids.iter().enumerate() {
+        if names[s].is_some() || c.is_empty() {
+            continue;
+        }
+        for (p, (_, v)) in profiles.iter().enumerate() {
+            let score: f32 = c.iter().zip(v).map(|(a, b)| a * b).sum();
+            if score >= threshold {
+                pairs.push((score, s, p));
+            }
+        }
+    }
+    pairs.sort_by(|a, b| b.0.total_cmp(&a.0));
+    for (_, s, p) in pairs {
+        let name = &profiles[p].0;
+        if names[s].is_none() && !names.iter().any(|n| n.as_deref() == Some(name.as_str())) {
+            names[s] = Some(name.clone());
+        }
+    }
+}
+
+/// Final label per speaker id: its name, else "Speaker N" numbered in id order.
+pub fn labels(names: &[Option<String>]) -> Vec<String> {
+    let mut n = 0;
+    names.iter().map(|x| x.clone().unwrap_or_else(|| { n += 1; format!("Speaker {n}") })).collect()
+}
+
 fn pool<R: Runtime>(app: &AppHandle<R>) -> Result<SqlitePool, String> {
     Ok(app.try_state::<AppState>().ok_or("App state not available")?.db_manager.pool().clone())
 }
@@ -173,6 +210,30 @@ pub(crate) mod tests {
 
     fn sample(label: &str, e: [f32; 2], secs: f64) -> Sample {
         Sample { label: label.into(), embedding: normalize(e.to_vec()), speech_secs: secs }
+    }
+
+    #[test]
+    fn match_is_one_to_one_best_first_and_thresholded() {
+        let profiles = vec![("Priya".to_string(), normalize(vec![1.0, 0.0])), ("Dana".to_string(), normalize(vec![0.0, 1.0]))];
+        // Speaker 0 is close to Priya, speaker 1 closer still, speaker 2 near nobody.
+        let c = vec![normalize(vec![1.0, 0.3]), normalize(vec![1.0, 0.1]), normalize(vec![-1.0, -1.0])];
+        let mut names = vec![None, None, None];
+        match_voices(&c, &mut names, &profiles, 0.55);
+        assert_eq!(names, vec![None, Some("Priya".into()), None]);
+    }
+
+    #[test]
+    fn match_respects_names_already_given() {
+        let profiles = vec![("Priya".to_string(), normalize(vec![1.0, 0.0]))];
+        let c = vec![normalize(vec![1.0, 0.0]), normalize(vec![1.0, 0.05])];
+        let mut names = vec![None, Some("Priya".to_string())];
+        match_voices(&c, &mut names, &profiles, 0.55);
+        assert_eq!(names, vec![None, Some("Priya".into())], "Priya already taken by a hint");
+    }
+
+    #[test]
+    fn unnamed_speakers_are_numbered_consecutively() {
+        assert_eq!(labels(&[None, Some("Priya".into()), None]), vec!["Speaker 1", "Priya", "Speaker 2"]);
     }
 
     #[test]
