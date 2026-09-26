@@ -59,6 +59,7 @@ pub mod state;
 pub mod summary;
 pub mod tray;
 pub mod utils;
+pub mod voices;
 pub mod whisper_engine;
 
 use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
@@ -860,6 +861,9 @@ pub fn run() {
             audio::retranscription::start_retranscription_command,
             diarization::start_speaker_identification,
             diarization::api_rename_speaker,
+            voices::api_list_voices,
+            voices::api_rename_voice,
+            voices::api_forget_voice,
             meeting_detector::meeting_prompt_info,
             meeting_detector::meeting_prompt_respond,
             meeting_detector::reveal_main_window,

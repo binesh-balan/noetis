@@ -925,14 +925,16 @@ pub async fn api_rename_speaker<R: Runtime>(
         return Err("Speaker name must be 1-64 characters".into());
     }
     let state = app.try_state::<AppState>().ok_or("App state not available")?;
-    sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
-        .bind(to)
-        .bind(&meeting_id)
-        .bind(&from)
-        .execute(state.db_manager.pool())
-        .await
-        .map(|r| r.rows_affected())
-        .map_err(|e| format!("Failed to rename speaker: {}", e))
+    let fail = |e: sqlx::Error| format!("Failed to rename speaker: {}", e);
+    let mut tx = state.db_manager.pool().begin().await.map_err(fail)?;
+    let n = sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
+        .bind(to).bind(&meeting_id).bind(&from)
+        .execute(&mut *tx).await.map_err(fail)?
+        .rows_affected();
+    // Teaches voice memory: the meeting's sample for `from` now belongs to `to`.
+    crate::voices::relabel_in_meeting(&mut tx, &meeting_id, &from, to).await.map_err(fail)?;
+    tx.commit().await.map_err(fail)?;
+    Ok(n)
 }
 
 #[cfg(test)]
