@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ export function SpeakerSettings() {
   const [voices, setVoices] = useState<Voice[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const cancelledRef = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -28,6 +29,10 @@ export function SpeakerSettings() {
   useEffect(() => { load(); }, [load]);
 
   const rename = async (from: string) => {
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      return;
+    }
     const to = draft.trim();
     setEditing(null);
     if (!to || to === from) return;
@@ -77,7 +82,10 @@ export function SpeakerSettings() {
                     onBlur={() => rename(v.name)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') rename(v.name);
-                      if (e.key === 'Escape') setEditing(null);
+                      if (e.key === 'Escape') {
+                        cancelledRef.current = true;
+                        setEditing(null);
+                      }
                     }}
                   />
                 ) : (
@@ -90,7 +98,7 @@ export function SpeakerSettings() {
                   </>
                 )}
               </div>
-              <Button variant="ghost" size="sm" onClick={() => { setEditing(v.name); setDraft(v.name); }}>
+              <Button variant="ghost" size="sm" onClick={() => { cancelledRef.current = false; setEditing(v.name); setDraft(v.name); }}>
                 Rename
               </Button>
               <Button variant="ghost" size="sm" className="text-destructive" onClick={() => forget(v.name)}>
