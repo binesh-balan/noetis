@@ -8,6 +8,7 @@ import Analytics from '@/lib/analytics';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useConfig } from '@/contexts/ConfigContext';
+import { usePlatform } from '@/hooks/usePlatform';
 
 export type MeetingDetection = 'off' | 'ask' | 'auto';
 
@@ -36,7 +37,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
-  const [isWindows, setIsWindows] = useState(false);
+  const isWindows = usePlatform() === 'windows';
   const { isRecording } = useRecordingState();
   const { setSelectedDevices } = useConfig();
 
@@ -76,12 +77,6 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       }
     };
     loadNotificationPref();
-  }, []);
-
-  useEffect(() => {
-    import('@tauri-apps/plugin-os')
-      .then(({ platform }) => setIsWindows(platform() === 'windows'))
-      .catch(() => setIsWindows(false));
   }, []);
 
   const handleAutoSaveToggle = async (enabled: boolean) => {
