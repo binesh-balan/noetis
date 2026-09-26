@@ -12,11 +12,11 @@ import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { RecordingStateProvider, useRecordingState } from '@/contexts/RecordingStateContext'
+import { RecordingStateProvider, useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext'
 import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
@@ -66,6 +66,60 @@ function ConditionalImportDialog({
 function ThemedToaster() {
   const { resolvedTheme } = useTheme()
   return <Toaster position="bottom-center" richColors closeButton theme={resolvedTheme} />
+}
+
+// The meeting detector (meeting_detector::start_recording) asks to record a meeting. Wait for the
+// previous recording's stop/transcribe/save to finish, then start through the sidebar's
+// client-side path, so nothing in flight is reloaded away. Mounted during onboarding too.
+function DetectorStartListener({ showOnboarding }: { showOnboarding: boolean }) {
+  const { isRecording, status } = useRecordingState();
+  const { handleRecordingToggle } = useSidebar();
+  const latest = useRef({ showOnboarding, handleRecordingToggle, busy: false });
+  latest.current = {
+    showOnboarding,
+    handleRecordingToggle,
+    busy: isRecording || (status !== RecordingStatus.IDLE && status !== RecordingStatus.ERROR),
+  };
+
+  useEffect(() => {
+    const unlisten = listen<string>('detector-start-recording', async ({ payload: title }) => {
+      // Also clears the detector's ownership of this (not started) recording.
+      const reveal = () => invoke('reveal_main_window').catch(() => undefined);
+      if (latest.current.showOnboarding) {
+        toast.error('Please complete setup first', {
+          description: 'Finish onboarding before meetings can be recorded.'
+        });
+        return reveal();
+      }
+      const deadline = Date.now() + 3 * 60_000;
+      // ponytail: polls a ref every 500 ms (up to 3 min); fine because this listener lives in the
+      // root layout and never unmounts. Subscribe to status changes if more waiters appear.
+      while (latest.current.busy) {
+        if (Date.now() > deadline) {
+          toast.error("Couldn't record the meeting", {
+            description: 'The previous recording was still being processed.'
+          });
+          return reveal();
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      // The call may have ended (or the start been disowned) while we waited.
+      if (!(await invoke<boolean>('detector_start_pending').catch(() => false))) return;
+      if (latest.current.busy) {
+        // Something else started recording meanwhile; nothing to reveal.
+        invoke('disown_detector_start').catch(() => undefined);
+        return;
+      }
+      sessionStorage.setItem('autoStartMeetingName', title);
+      sessionStorage.setItem('autoStartSource', 'detector');
+      latest.current.handleRecordingToggle();
+    });
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, []);
+
+  return null;
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -276,6 +330,7 @@ export default function RootLayout({
                             <ImportDialogProvider onOpen={handleOpenImportDialog}>
                               {/* Download progress toast provider - listens for background downloads */}
                               <DownloadProgressToastProvider />
+                              <DetectorStartListener showOnboarding={showOnboarding} />
 
                               {/* Show onboarding or main app */}
                               {showOnboarding ? (

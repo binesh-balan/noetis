@@ -43,6 +43,7 @@ pub mod console_utils;
 pub mod database;
 pub mod diarization;
 pub mod entra;
+pub mod meeting_detector;
 pub mod network_policy;
 pub mod notifications;
 pub mod ollama;
@@ -54,10 +55,12 @@ pub mod openrouter;
 pub mod parakeet_engine;
 pub mod policy;
 pub mod secure_storage;
+pub mod speaker_hints;
 pub mod state;
 pub mod summary;
 pub mod tray;
 pub mod utils;
+pub mod voices;
 pub mod whisper_engine;
 
 use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
@@ -519,6 +522,7 @@ pub fn run() {
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);
             }
+            meeting_detector::spawn(_app.handle().clone());
 
             // Initialize notification system with proper defaults
             log::info!("Initializing notification system...");
@@ -858,6 +862,14 @@ pub fn run() {
             audio::retranscription::start_retranscription_command,
             diarization::start_speaker_identification,
             diarization::api_rename_speaker,
+            voices::api_list_voices,
+            voices::api_rename_voice,
+            voices::api_forget_voice,
+            meeting_detector::meeting_prompt_info,
+            meeting_detector::meeting_prompt_respond,
+            meeting_detector::reveal_main_window,
+            meeting_detector::detector_start_pending,
+            meeting_detector::disown_detector_start,
             audio::retranscription::cancel_retranscription_command,
             audio::retranscription::is_retranscription_in_progress_command,
             // Import audio commands

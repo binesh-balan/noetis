@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Noetis</title>
+<style>
+  /* Values mirror src/app/globals.css :root / .dark tokens. */
+  :root { --bg: 240 14.3% 98.6%; --fg: 225 8.3% 9.4%; --muted: 229 8.2% 40.6%; --border: 228 9.8% 90%; --primary: 240 60% 59.8%; --primary-fg: 0 0% 100%; --secondary: 240 11.8% 93.3%; }
+  :root.dark { --bg: 228 11.6% 8.4%; --fg: 225 8.7% 91%; --muted: 226 5.9% 56.7%; --border: 225 10.5% 14.9%; --primary: 239 87.1% 75.7%; --primary-fg: 225 12.5% 6.3%; --secondary: 225 12.1% 12.9%; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px/1.4 "Segoe UI", system-ui, sans-serif; background: hsl(var(--bg)); color: hsl(var(--fg)); border: 1px solid hsl(var(--border)); box-sizing: border-box; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; user-select: none; }
+  h1 { font-size: 14px; font-weight: 600; margin: 0; }
+  p { margin: 0; color: hsl(var(--muted)); font-size: 12px; }
+  .row { display: flex; gap: 8px; margin-top: auto; justify-content: flex-end; }
+  button { font: inherit; border: 0; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  #record { background: hsl(var(--primary)); color: hsl(var(--primary-fg)); font-weight: 600; }
+  #dismiss { background: hsl(var(--secondary)); color: hsl(var(--fg)); }
+  button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <h1 id="title">Meeting detected</h1>
+  <p id="hint" hidden>Auto-summary is off (Settings → Summary).</p>
+  <div class="row">
+    <button id="dismiss">Not now</button>
+    <button id="record">Record</button>
+  </div>
+  <script src="/meeting-prompt.js"></script>
+</body>
+</html>

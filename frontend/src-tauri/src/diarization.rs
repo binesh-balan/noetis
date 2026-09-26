@@ -485,11 +485,34 @@ fn extract(
     Ok(x)
 }
 
+/// Frame-level speaker track plus each speaker's centroid embedding (L2-normalised, indexed by id).
+pub(crate) struct Diarization {
+    pub track: Vec<Option<usize>>,
+    pub centroids: Vec<Vec<f32>>,
+}
+
+/// Seconds of speech per speaker id in a frame track.
+pub(crate) fn speech_secs(track: &[Option<usize>], k: usize) -> Vec<f64> {
+    let mut secs = vec![0.0; k];
+    for id in track.iter().flatten() {
+        if *id < k {
+            secs[*id] += FRAME_SECS;
+        }
+    }
+    secs
+}
+
 impl Extracted {
-    /// Global speaker (or None for silence) for every FRAME_SECS frame of the audio.
-    fn resolve(&self, threshold: f32) -> Vec<Option<usize>> {
+    /// Global speaker (or None for silence) for every FRAME_SECS frame of the audio, plus
+    /// each speaker's centroid embedding.
+    fn resolve(&self, threshold: f32) -> Diarization {
         let ids = assign_speakers_scaled(&self.embeddings, &self.durations, threshold);
         let k = ids.iter().max().map_or(0, |m| m + 1).max(1);
+        let mut centroids = vec![vec![0f32; self.embeddings.first().map_or(0, |e| e.len())]; k];
+        for (e, &id) in self.embeddings.iter().zip(&ids) {
+            centroids[id].iter_mut().zip(e).for_each(|(a, b)| *a += b);
+        }
+        let centroids = centroids.into_iter().map(crate::voices::normalize).collect();
         let mut global = vec![[None::<usize>; 3]; self.starts.len()];
         for (&(w, local), &id) in self.owners.iter().zip(&ids) {
             global[w][local] = Some(id);
@@ -513,25 +536,26 @@ impl Extracted {
                 }
             }
         }
-        (0..self.total_frames)
+        let track = (0..self.total_frames)
             .map(|g| {
                 let row = &score[g * k..g * k + k];
                 (0..k)
                     .max_by(|&a, &b| row[a].total_cmp(&row[b]))
                     .filter(|&best| cover[g] > 0 && row[best] > 0.0 && row[best] >= 0.5 * cover[g] as f32)
             })
-            .collect()
+            .collect();
+        Diarization { track, centroids }
     }
 }
 
-/// Global speaker (or None for silence) for every FRAME_SECS frame of `audio`.
+/// Global speaker (or None for silence) for every FRAME_SECS frame of `audio`, plus centroids.
 fn diarize(
     segmenter: &mut Segmenter,
     embedder: &mut Embedder,
     audio: &[f32],
     params: &Params,
     progress: impl FnMut(f64),
-) -> Result<Vec<Option<usize>>> {
+) -> Result<Diarization> {
     Ok(extract(segmenter, embedder, audio, params, progress)?.resolve(params.threshold))
 }
 
@@ -799,7 +823,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
 
     emit_progress(app, meeting_id, "analyzing", 25, "Analyzing voices...");
     let (app_for_task, meeting, audio) = (app.clone(), meeting_id.to_string(), samples.clone());
-    let track = tokio::task::spawn_blocking(move || -> Result<Vec<Option<usize>>> {
+    let Diarization { track, centroids } = tokio::task::spawn_blocking(move || -> Result<Diarization> {
         let mut segmenter = Segmenter::load(&segmentation_path).context("loading segmentation model")?;
         let mut embedder = Embedder::load(&embedding_path).context("loading speaker model")?;
         let mut last = 0u32;
@@ -812,6 +836,16 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
         })
     })
     .await??;
+    let k = centroids.len();
+    let secs = speech_secs(&track, k);
+    // Meeting-app hints first, then known voices.
+    let hints = crate::speaker_hints::load(folder);
+    let mut names = crate::speaker_hints::names_from_hints(&track, k, FRAME_SECS, &hints);
+    match crate::voices::load_profiles(&pool, meeting_id).await {
+        Ok(profiles) => crate::voices::match_voices(&centroids, &mut names, &profiles, crate::voices::VOICE_MATCH_THRESHOLD),
+        Err(e) => warn!("Voice memory unavailable for {}: {}", meeting_id, e),
+    }
+    let labels = crate::voices::labels(&names);
 
     // Turns per line; lines without detected speech inherit the nearest line's speaker.
     let mut turns: Vec<Vec<(usize, f64, f64)>> =
@@ -852,7 +886,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
     }
 
     emit_progress(app, meeting_id, "saving", 94, "Saving speakers...");
-    let speaker = |id: usize| format!("Speaker {}", id + 1);
+    let speaker = |id: usize| labels.get(id).cloned().unwrap_or_else(|| format!("Speaker {}", id + 1));
     let mut tx = pool.begin().await?;
     for (i, (id, _, _, _, timestamp)) in rows.iter().enumerate() {
         if let Some(texts) = &split_text[i] {
@@ -873,6 +907,22 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
                 .bind(speaker(first[i].unwrap_or(0))).bind(id).bind(meeting_id)
                 .execute(&mut *tx).await?;
         }
+    }
+
+    // Voiceprints go in the labels' transaction, so a rename can't land between the two; under
+    // a savepoint, so a sample failure rolls back only the samples, never the labels.
+    let samples: Vec<crate::voices::Sample> = (0..k)
+        .filter(|&id| secs[id] >= crate::voices::MIN_SAMPLE_SECS && !centroids[id].is_empty())
+        .map(|id| crate::voices::Sample { label: labels[id].clone(), embedding: centroids[id].clone(), speech_secs: secs[id] })
+        .collect();
+    let saved = async {
+        let mut sp = sqlx::Connection::begin(&mut *tx).await?; // nested: a SAVEPOINT
+        crate::voices::save_meeting_samples(&mut sp, meeting_id, &samples).await?;
+        sp.commit().await
+    }
+    .await;
+    if let Err(e) = saved {
+        warn!("Couldn't save voice samples for {}: {}", meeting_id, e);
     }
     tx.commit().await?;
 
@@ -925,14 +975,16 @@ pub async fn api_rename_speaker<R: Runtime>(
         return Err("Speaker name must be 1-64 characters".into());
     }
     let state = app.try_state::<AppState>().ok_or("App state not available")?;
-    sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
-        .bind(to)
-        .bind(&meeting_id)
-        .bind(&from)
-        .execute(state.db_manager.pool())
-        .await
-        .map(|r| r.rows_affected())
-        .map_err(|e| format!("Failed to rename speaker: {}", e))
+    let fail = |e: sqlx::Error| format!("Failed to rename speaker: {}", e);
+    let mut tx = state.db_manager.pool().begin().await.map_err(fail)?;
+    let n = sqlx::query("UPDATE transcripts SET speaker = ? WHERE meeting_id = ? AND speaker = ?")
+        .bind(to).bind(&meeting_id).bind(&from)
+        .execute(&mut *tx).await.map_err(fail)?
+        .rows_affected();
+    // Teaches voice memory: the meeting's sample for `from` now belongs to `to`.
+    crate::voices::relabel_in_meeting(&mut tx, &meeting_id, &from, to).await.map_err(fail)?;
+    tx.commit().await.map_err(fail)?;
+    Ok(n)
 }
 
 #[cfg(test)]
@@ -1015,6 +1067,13 @@ mod tests {
     }
 
     #[test]
+    fn speech_secs_counts_frames_per_speaker() {
+        let track = vec![Some(0), Some(0), None, Some(1)];
+        let s = speech_secs(&track, 2);
+        assert!((s[0] - 2.0 * FRAME_SECS).abs() < 1e-9 && (s[1] - FRAME_SECS).abs() < 1e-9);
+    }
+
+    #[test]
     fn fill_gaps_uses_nearest_line() {
         let mut labels = vec![None, Some(1), None, None, Some(0)];
         fill_gaps(&mut labels);
@@ -1066,7 +1125,7 @@ mod tests {
         let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
         let mut emb = Embedder::load(&dir.join(EMBEDDING_MODEL.file)).unwrap();
         let params = test_params();
-        let track = diarize(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
+        let track = diarize(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap().track;
 
         // Raw frame track as a compact timeline (who is active, 0.1 s resolution).
         let per = (0.1 / FRAME_SECS) as usize;
@@ -1111,7 +1170,7 @@ mod tests {
             .map(|t| serde_json::from_str(&t).unwrap());
         let mut track = Vec::new();
         for &th in &thresholds {
-            track = extracted.resolve(th);
+            track = extracted.resolve(th).track;
             let found: std::collections::BTreeSet<usize> = track.iter().flatten().copied().collect();
             print!("threshold {th:.2}: speakers found {}", found.len());
             // Frame accuracy with a many-to-one mapping of predicted speakers to true ones.
@@ -1149,6 +1208,62 @@ mod tests {
             if t.is_empty() {
                 println!("[{a:6.1}-{b:6.1}] (no speech detected): {}", text.chars().take(80).collect::<String>());
             }
+        }
+    }
+
+    /// Voice memory across recordings, label-free: diarize the whole file as reference, enrol
+    /// voices from the first half, match the second half. A match is right when both halves'
+    /// speakers map to the same reference speaker. Needs DIARIZATION_TEST_DIR, DIARIZATION_AUDIO.
+    #[test]
+    #[ignore]
+    fn real_voice_matching() {
+        use crate::voices::{match_voices, MIN_SAMPLE_SECS};
+        let dir = PathBuf::from(std::env::var("DIARIZATION_TEST_DIR").unwrap());
+        let file = PathBuf::from(std::env::var("DIARIZATION_AUDIO").unwrap());
+        let audio = crate::audio::decoder::decode_audio_file(&file).unwrap().to_whisper_format();
+        let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
+        let mut emb = Embedder::load(&dir.join(EMBEDDING_MODEL.file)).unwrap();
+        let params = test_params();
+        let full = diarize(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
+        let mid = audio.len() / 2 / FRAME_STEP_SAMPLES * FRAME_STEP_SAMPLES;
+        let a = diarize(&mut seg, &mut emb, &audio[..mid], &params, |_| {}).unwrap();
+        let b = diarize(&mut seg, &mut emb, &audio[mid..], &params, |_| {}).unwrap();
+
+        // Reference speaker most often under each half-speaker's frames.
+        let majority = |d: &Diarization, offset: usize| -> Vec<Option<usize>> {
+            (0..d.centroids.len())
+                .map(|id| {
+                    let mut counts = std::collections::HashMap::new();
+                    for (f, s) in d.track.iter().enumerate() {
+                        if *s == Some(id) {
+                            if let Some(Some(r)) = full.track.get(offset + f) {
+                                *counts.entry(*r).or_insert(0usize) += 1;
+                            }
+                        }
+                    }
+                    counts.into_iter().max_by_key(|(_, n)| *n).map(|(r, _)| r)
+                })
+                .collect()
+        };
+        let (ra, rb) = (majority(&a, 0), majority(&b, mid / FRAME_STEP_SAMPLES));
+        let secs_a = speech_secs(&a.track, a.centroids.len());
+        let profiles: Vec<(String, Vec<f32>)> = a.centroids.iter().enumerate()
+            .filter(|(i, c)| secs_a[*i] >= MIN_SAMPLE_SECS && !c.is_empty())
+            .map(|(i, c)| (format!("ref{}", ra[i].map_or(99, |r| r)), c.clone()))
+            .collect();
+        println!("reference speakers: {}, enrolled: {}", full.centroids.len(), profiles.len());
+        for t in [0.40f32, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70] {
+            let mut names = vec![None; b.centroids.len()];
+            match_voices(&b.centroids, &mut names, &profiles, t);
+            let (mut right, mut wrong, mut unnamed) = (0, 0, 0);
+            for (i, n) in names.iter().enumerate() {
+                match n {
+                    Some(n) if rb[i].map(|r| format!("ref{r}")).as_deref() == Some(n.as_str()) => right += 1,
+                    Some(_) => wrong += 1,
+                    None => unnamed += 1,
+                }
+            }
+            println!("threshold {t:.2}: right {right}, wrong {wrong}, unnamed {unnamed}");
         }
     }
 }
