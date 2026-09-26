@@ -85,6 +85,10 @@ mod tests {
     fn reads_the_capability_store() {
         let entries = super::capability_entries().expect("microphone capability store readable");
         assert!(entries.iter().all(|(k, _, _)| !k.is_empty()));
-        assert!(!super::visible_window_titles().is_empty());
+        let windows = super::visible_window_titles();
+        for (exe, title) in windows {
+            assert!(!title.is_empty(), "every window should have a non-empty title");
+            assert!(exe.ends_with(".exe"), "every exe name should end with .exe");
+        }
     }
 }
