@@ -61,6 +61,7 @@ export function SpeakerSettings() {
         <p className="text-sm text-muted-foreground">
           Rename a speaker in any meeting and Noetis recognises their voice next time.
           Voiceprints are stored only on this computer.
+          Renaming a voice here renames that person in every meeting.
         </p>
       </div>
       {voices === null ? (

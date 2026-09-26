@@ -168,10 +168,14 @@ fn pool<R: Runtime>(app: &AppHandle<R>) -> Result<SqlitePool, String> {
     Ok(app.try_state::<AppState>().ok_or("App state not available")?.db_manager.pool().clone())
 }
 
-fn valid_name(name: &str) -> Result<&str, String> {
+fn valid_voice_name(name: &str) -> Result<&str, String> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 64 {
         return Err("Speaker name must be 1-64 characters".into());
+    }
+    // A voice named "Speaker N" would collide with other meetings' unnamed speakers.
+    if is_placeholder(name) {
+        return Err("Choose a name other than \"Speaker N\"".into());
     }
     Ok(name)
 }
@@ -183,7 +187,7 @@ pub async fn api_list_voices<R: Runtime>(app: AppHandle<R>) -> Result<Vec<VoiceS
 
 #[tauri::command]
 pub async fn api_rename_voice<R: Runtime>(app: AppHandle<R>, from: String, to: String) -> Result<(), String> {
-    let to = valid_name(&to)?;
+    let to = valid_voice_name(&to)?;
     rename_voice(&pool(&app)?, &from, to).await.map_err(|e| format!("Failed to rename voice: {e}"))
 }
 
@@ -242,6 +246,13 @@ pub(crate) mod tests {
         assert!(!is_placeholder("Speaker"));
         assert!(!is_placeholder("Speaker X"));
         assert!(!is_placeholder("Priya"));
+    }
+
+    #[test]
+    fn voice_names_cannot_be_placeholders() {
+        assert!(valid_voice_name("Speaker 2").is_err());
+        assert!(valid_voice_name("  ").is_err());
+        assert_eq!(valid_voice_name(" Priya "), Ok("Priya"));
     }
 
     #[tokio::test]
