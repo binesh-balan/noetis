@@ -275,13 +275,14 @@ export function useRecordingStart(
             // Show recording notification if enabled
             await showRecordingNotification();
           } catch (error) {
-            revealIfDetector();
             console.error('Failed to auto-start recording:', error);
             const errorMsg = error instanceof Error ? error.message : String(error);
             if (errorMsg.includes('already in progress')) {
-              // Benign race — another start won and is live; skip ERROR/alert.
+              // Benign race — another start won and is live; skip ERROR/alert, and don't
+              // reveal/disown, since that live recording may be the detector's own.
               setStatus(RecordingStatus.RECORDING);
             } else {
+              revealIfDetector();
               const isRuntimeError = isTranscriptionRuntimeStartError(error);
               setStatus(RecordingStatus.ERROR, isRuntimeError
                 ? TRANSCRIPTION_RUNTIME_USER_MESSAGE

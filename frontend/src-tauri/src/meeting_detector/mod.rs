@@ -207,6 +207,7 @@ async fn on_ended<R: Runtime>(app: &AppHandle<R>) {
     close_prompt(app);
     if DETECTOR_OWNED.swap(false, SeqCst) && crate::audio::recording_commands::is_recording().await {
         log::info!("Stopping the recording the detector started");
+        crate::tray::set_tray_state(app, crate::tray::RecordingState::Stopping);
         crate::tray::stop_recording_flow(app).await;
     }
 }
@@ -283,9 +284,18 @@ pub async fn meeting_prompt_respond<R: Runtime>(app: AppHandle<R>, record: bool)
     }
 }
 
-/// Shows the main window, e.g. so a detector-started recording's error is visible.
+/// Clears detector ownership of the current recording attempt. Called only when a detector
+/// start failed, so a recording the user then starts manually isn't later auto-stopped as if
+/// the detector had started it.
+fn disown_recording() {
+    DETECTOR_OWNED.store(false, SeqCst);
+}
+
+/// Shows the main window, e.g. so a detector-started recording's error is visible. Only called
+/// on a failed detector start, so it also disowns the (failed) attempt.
 #[tauri::command]
 pub fn reveal_main_window<R: Runtime>(app: AppHandle<R>) {
+    disown_recording();
     crate::tray::focus_main_window(&app);
 }
 
@@ -298,6 +308,13 @@ mod tests {
         use chrono::TimeZone;
         let t = chrono::Local.with_ymd_and_hms(2026, 9, 6, 14, 5, 0).unwrap();
         assert_eq!(meeting_title("Zoom", t), "Zoom meeting, Sep 6, 14:05");
+    }
+
+    #[test]
+    fn disown_recording_clears_ownership() {
+        DETECTOR_OWNED.store(true, SeqCst);
+        disown_recording();
+        assert!(!DETECTOR_OWNED.load(SeqCst));
     }
 
     fn s(n: u64) -> Duration {
