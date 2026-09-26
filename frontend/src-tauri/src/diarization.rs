@@ -838,8 +838,9 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
     .await??;
     let k = centroids.len();
     let secs = speech_secs(&track, k);
-    // Names from the meeting app's "who is speaking" hints (Part 4) go here, then known voices.
-    let mut names: Vec<Option<String>> = vec![None; k];
+    // Meeting-app hints first, then known voices.
+    let hints = crate::speaker_hints::load(folder);
+    let mut names = crate::speaker_hints::names_from_hints(&track, k, FRAME_SECS, &hints);
     match crate::voices::load_profiles(&pool, meeting_id).await {
         Ok(profiles) => crate::voices::match_voices(&centroids, &mut names, &profiles, crate::voices::VOICE_MATCH_THRESHOLD),
         Err(e) => warn!("Voice memory unavailable for {}: {}", meeting_id, e),

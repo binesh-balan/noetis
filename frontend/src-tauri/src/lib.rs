@@ -55,6 +55,7 @@ pub mod openrouter;
 pub mod parakeet_engine;
 pub mod policy;
 pub mod secure_storage;
+pub mod speaker_hints;
 pub mod state;
 pub mod summary;
 pub mod tray;
