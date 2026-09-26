@@ -520,6 +520,7 @@ pub fn run() {
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);
             }
+            meeting_detector::spawn(_app.handle().clone());
 
             // Initialize notification system with proper defaults
             log::info!("Initializing notification system...");
@@ -859,6 +860,9 @@ pub fn run() {
             audio::retranscription::start_retranscription_command,
             diarization::start_speaker_identification,
             diarization::api_rename_speaker,
+            meeting_detector::meeting_prompt_info,
+            meeting_detector::meeting_prompt_respond,
+            meeting_detector::reveal_main_window,
             audio::retranscription::cancel_retranscription_command,
             audio::retranscription::is_retranscription_in_progress_command,
             // Import audio commands

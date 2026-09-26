@@ -4,7 +4,10 @@
 #[cfg(target_os = "windows")]
 mod signal;
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Manager, Runtime};
 
 /// ponytail: calibration knobs, checked in real calls (spec Part 1).
 pub const POLL: Duration = Duration::from_secs(2);
@@ -133,9 +136,169 @@ impl Detector {
     }
 }
 
+const PROMPT_LABEL: &str = "meeting-prompt";
+const PROMPT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Set when the detector starts a recording; only those are auto-stopped.
+/// ponytail: if the user stops it and starts another during the same call, that one is also
+/// auto-stopped at call end. Track the recording id if that bites.
+static DETECTOR_OWNED: AtomicBool = AtomicBool::new(false);
+static CURRENT_APP: Mutex<Option<&'static str>> = Mutex::new(None);
+/// Bumped per prompt so an old prompt's timeout can't close a newer one.
+static PROMPT_GEN: AtomicU64 = AtomicU64::new(0);
+
+pub fn meeting_title(app: &str, now: chrono::DateTime<chrono::Local>) -> String {
+    format!("{app} meeting, {}", now.format("%b %-d, %H:%M"))
+}
+
+/// Starts the background detector (Windows only).
+pub fn spawn<R: Runtime>(app: AppHandle<R>) {
+    #[cfg(target_os = "windows")]
+    tauri::async_runtime::spawn(async move {
+        let mut detector = Detector::default();
+        loop {
+            tokio::time::sleep(POLL).await;
+            let holders = match tokio::task::spawn_blocking(signal::meeting_mic_holders).await {
+                Ok(Ok(h)) => h,
+                Ok(Err(e)) => {
+                    log::warn!("Meeting detection disabled: can't read microphone usage ({e})");
+                    return;
+                }
+                Err(e) => {
+                    log::warn!("Meeting detection poll failed: {e}");
+                    continue;
+                }
+            };
+            match detector.tick(Instant::now(), &holders) {
+                Some(Event::Started(name)) => on_started(&app, name).await,
+                Some(Event::Ended) => on_ended(&app).await,
+                None => {}
+            }
+        }
+    });
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+}
+
+async fn on_started<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
+    log::info!("Meeting detected: {name}");
+    *CURRENT_APP.lock().unwrap() = Some(name);
+    if crate::audio::recording_commands::is_recording().await {
+        return;
+    }
+    let mode = crate::audio::recording_preferences::load_recording_preferences(app)
+        .await
+        .map(|p| p.meeting_detection)
+        .unwrap_or_else(|_| "ask".into());
+    match mode.as_str() {
+        "auto" => {
+            start_recording(app, name);
+            use tauri_plugin_notification::NotificationExt;
+            let _ = app.notification().builder().title("Noetis").body(format!("Recording {name} meeting")).show();
+        }
+        "ask" => open_prompt(app),
+        _ => {}
+    }
+}
+
+async fn on_ended<R: Runtime>(app: &AppHandle<R>) {
+    log::info!("Meeting ended");
+    *CURRENT_APP.lock().unwrap() = None;
+    close_prompt(app);
+    if DETECTOR_OWNED.swap(false, SeqCst) && crate::audio::recording_commands::is_recording().await {
+        log::info!("Stopping the recording the detector started");
+        crate::tray::stop_recording_flow(app).await;
+    }
+}
+
+/// Same path as the tray's Start: flag + navigate the main webview to Home, which starts.
+fn start_recording<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
+    let Some(main) = app.get_webview_window("main") else { return };
+    DETECTOR_OWNED.store(true, SeqCst);
+    let title = serde_json::to_string(&meeting_title(name, chrono::Local::now())).unwrap_or_else(|_| "\"\"".into());
+    let _ = main.eval(&format!(
+        "sessionStorage.setItem('autoStartRecording','true');\
+         sessionStorage.setItem('autoStartMeetingName',{title});\
+         sessionStorage.setItem('autoStartSource','detector');\
+         window.location.assign('/')"
+    ));
+}
+
+fn open_prompt<R: Runtime>(app: &AppHandle<R>) {
+    if app.get_webview_window(PROMPT_LABEL).is_some() {
+        return;
+    }
+    let (w, h) = (360.0, 132.0);
+    let mut builder = tauri::WebviewWindowBuilder::new(app, PROMPT_LABEL, tauri::WebviewUrl::App("meeting-prompt.html".into()))
+        .title("Noetis")
+        .inner_size(w, h)
+        .resizable(false)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false);
+    if let Ok(Some(m)) = app.primary_monitor() {
+        let scale = m.scale_factor();
+        let (pos, size) = (m.position(), m.size());
+        // Bottom-right, clear of the taskbar.
+        let x = (pos.x as f64 + size.width as f64) / scale - w - 16.0;
+        let y = (pos.y as f64 + size.height as f64) / scale - h - 64.0;
+        builder = builder.position(x, y);
+    }
+    match builder.build() {
+        Ok(_) => {
+            let gen = PROMPT_GEN.fetch_add(1, SeqCst) + 1;
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(PROMPT_TIMEOUT).await;
+                if PROMPT_GEN.load(SeqCst) == gen {
+                    close_prompt(&app);
+                }
+            });
+        }
+        Err(e) => log::warn!("Couldn't open the meeting prompt: {e}"),
+    }
+}
+
+fn close_prompt<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(w) = app.get_webview_window(PROMPT_LABEL) {
+        let _ = w.close();
+    }
+}
+
+/// App name for the prompt window ("Zoom"), or None if the meeting already ended.
+#[tauri::command]
+pub fn meeting_prompt_info() -> Option<String> {
+    CURRENT_APP.lock().unwrap().map(str::to_string)
+}
+
+#[tauri::command]
+pub async fn meeting_prompt_respond<R: Runtime>(app: AppHandle<R>, record: bool) {
+    close_prompt(&app);
+    let current = *CURRENT_APP.lock().unwrap();
+    if let (true, Some(name)) = (record, current) {
+        if !crate::audio::recording_commands::is_recording().await {
+            start_recording(&app, name);
+        }
+    }
+}
+
+/// Shows the main window, e.g. so a detector-started recording's error is visible.
+#[tauri::command]
+pub fn reveal_main_window<R: Runtime>(app: AppHandle<R>) {
+    crate::tray::focus_main_window(&app);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meeting_title_format() {
+        use chrono::TimeZone;
+        let t = chrono::Local.with_ymd_and_hms(2026, 9, 6, 14, 5, 0).unwrap();
+        assert_eq!(meeting_title("Zoom", t), "Zoom meeting, Sep 6, 14:05");
+    }
 
     fn s(n: u64) -> Duration {
         Duration::from_secs(n)

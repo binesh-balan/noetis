@@ -217,6 +217,13 @@ export function useRecordingStart(
           setIsAutoStarting(true);
           sessionStorage.removeItem('autoStartRecording'); // Clear the flag
 
+          const detectorTitle = sessionStorage.getItem('autoStartMeetingName');
+          const fromDetector = sessionStorage.getItem('autoStartSource') === 'detector';
+          sessionStorage.removeItem('autoStartMeetingName');
+          sessionStorage.removeItem('autoStartSource');
+          // A detector start happens with the window hidden; surface failures.
+          const revealIfDetector = () => { if (fromDetector) invoke('reveal_main_window').catch(() => undefined); };
+
           // Check the selected transcription model before starting.
           const modelReady = await checkModelReady();
           if (!modelReady) {
@@ -235,6 +242,7 @@ export function useRecordingStart(
               showModal?.('modelSelector', 'Transcription model setup required');
               Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_auto');
             }
+            revealIfDetector();
             setStatus(RecordingStatus.IDLE);
             setIsAutoStarting(false);
             return;
@@ -243,7 +251,7 @@ export function useRecordingStart(
           // Start the actual backend recording
           try {
             // Generate meeting title
-            const generatedMeetingTitle = generateMeetingTitle();
+            const generatedMeetingTitle = detectorTitle || generateMeetingTitle();
 
             // Set STARTING status before initiating backend recording
             setStatus(RecordingStatus.STARTING, 'Initializing recording...');
@@ -267,6 +275,7 @@ export function useRecordingStart(
             // Show recording notification if enabled
             await showRecordingNotification();
           } catch (error) {
+            revealIfDetector();
             console.error('Failed to auto-start recording:', error);
             const errorMsg = error instanceof Error ? error.message : String(error);
             if (errorMsg.includes('already in progress')) {
