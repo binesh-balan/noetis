@@ -908,15 +908,23 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
                 .execute(&mut *tx).await?;
         }
     }
-    tx.commit().await?;
 
+    // Voiceprints go in the labels' transaction, so a rename can't land between the two; under
+    // a savepoint, so a sample failure rolls back only the samples, never the labels.
     let samples: Vec<crate::voices::Sample> = (0..k)
         .filter(|&id| secs[id] >= crate::voices::MIN_SAMPLE_SECS && !centroids[id].is_empty())
         .map(|id| crate::voices::Sample { label: labels[id].clone(), embedding: centroids[id].clone(), speech_secs: secs[id] })
         .collect();
-    if let Err(e) = crate::voices::save_meeting_samples(&pool, meeting_id, &samples).await {
+    let saved = async {
+        let mut sp = sqlx::Connection::begin(&mut *tx).await?; // nested: a SAVEPOINT
+        crate::voices::save_meeting_samples(&mut sp, meeting_id, &samples).await?;
+        sp.commit().await
+    }
+    .await;
+    if let Err(e) = saved {
         warn!("Couldn't save voice samples for {}: {}", meeting_id, e);
     }
+    tx.commit().await?;
 
     let mut all: Vec<usize> = split_text
         .iter()

@@ -34,17 +34,16 @@ pub struct Sample {
     pub speech_secs: f64,
 }
 
-/// Replaces a meeting's samples.
-pub async fn save_meeting_samples(pool: &SqlitePool, meeting_id: &str, samples: &[Sample]) -> sqlx::Result<()> {
+/// Replaces a meeting's samples, inside the caller's transaction (with its speaker labels).
+pub async fn save_meeting_samples(tx: &mut Transaction<'_, Sqlite>, meeting_id: &str, samples: &[Sample]) -> sqlx::Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
-    let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM voice_samples WHERE meeting_id = ?").bind(meeting_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM voice_samples WHERE meeting_id = ?").bind(meeting_id).execute(&mut **tx).await?;
     for s in samples {
         sqlx::query("INSERT INTO voice_samples (meeting_id, label, embedding, speech_secs, created_at) VALUES (?, ?, ?, ?, ?)")
             .bind(meeting_id).bind(&s.label).bind(to_blob(&s.embedding)).bind(s.speech_secs).bind(&now)
-            .execute(&mut *tx).await?;
+            .execute(&mut **tx).await?;
     }
-    tx.commit().await
+    Ok(())
 }
 
 /// Known voices as (name, mean embedding, normalised), ignoring one meeting's samples.
@@ -212,6 +211,12 @@ pub(crate) mod tests {
         pool
     }
 
+    async fn save(pool: &SqlitePool, meeting_id: &str, samples: &[Sample]) -> sqlx::Result<()> {
+        let mut tx = pool.begin().await?;
+        save_meeting_samples(&mut tx, meeting_id, samples).await?;
+        tx.commit().await
+    }
+
     fn sample(label: &str, e: [f32; 2], secs: f64) -> Sample {
         Sample { label: label.into(), embedding: normalize(e.to_vec()), speech_secs: secs }
     }
@@ -258,8 +263,8 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn profiles_average_named_samples_and_skip_the_current_meeting() {
         let pool = test_pool().await;
-        save_meeting_samples(&pool, "m1", &[sample("Priya", [1.0, 0.0], 30.0), sample("Speaker 2", [0.0, 1.0], 30.0)]).await.unwrap();
-        save_meeting_samples(&pool, "m2", &[sample("Priya", [0.0, 1.0], 30.0)]).await.unwrap();
+        save(&pool, "m1", &[sample("Priya", [1.0, 0.0], 30.0), sample("Speaker 2", [0.0, 1.0], 30.0)]).await.unwrap();
+        save(&pool, "m2", &[sample("Priya", [0.0, 1.0], 30.0)]).await.unwrap();
         let p = load_profiles(&pool, "none").await.unwrap();
         assert_eq!(p.len(), 1, "placeholder skipped");
         assert!((p[0].1[0] - p[0].1[1]).abs() < 1e-6, "mean of both samples");
@@ -269,7 +274,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn relabel_moves_or_merges() {
         let pool = test_pool().await;
-        save_meeting_samples(&pool, "m1", &[sample("Speaker 1", [1.0, 0.0], 10.0), sample("Speaker 2", [0.0, 1.0], 30.0)]).await.unwrap();
+        save(&pool, "m1", &[sample("Speaker 1", [1.0, 0.0], 10.0), sample("Speaker 2", [0.0, 1.0], 30.0)]).await.unwrap();
         let mut tx = pool.begin().await.unwrap();
         relabel_in_meeting(&mut tx, "m1", "Speaker 1", "Dana").await.unwrap();
         relabel_in_meeting(&mut tx, "m1", "Speaker 2", "Dana").await.unwrap();
@@ -284,8 +289,8 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn rename_and_forget_voice() {
         let pool = test_pool().await;
-        save_meeting_samples(&pool, "m1", &[sample("Pria", [1.0, 0.0], 30.0)]).await.unwrap();
-        save_meeting_samples(&pool, "m2", &[sample("Pria", [1.0, 0.0], 30.0)]).await.unwrap();
+        save(&pool, "m1", &[sample("Pria", [1.0, 0.0], 30.0)]).await.unwrap();
+        save(&pool, "m2", &[sample("Pria", [1.0, 0.0], 30.0)]).await.unwrap();
         rename_voice(&pool, "Pria", "Priya").await.unwrap();
         let v = list_voices(&pool).await.unwrap();
         assert_eq!((v[0].name.as_str(), v[0].meetings), ("Priya", 2));
