@@ -137,6 +137,7 @@ impl Detector {
 }
 
 const PROMPT_LABEL: &str = "meeting-prompt";
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))] // only the Windows loop reaches it
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Set when the detector starts a recording; only those are auto-stopped.
@@ -145,6 +146,7 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(60);
 static DETECTOR_OWNED: AtomicBool = AtomicBool::new(false);
 static CURRENT_APP: Mutex<Option<&'static str>> = Mutex::new(None);
 /// Bumped per prompt so an old prompt's timeout can't close a newer one.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))] // only the Windows loop reaches it
 static PROMPT_GEN: AtomicU64 = AtomicU64::new(0);
 
 pub fn meeting_title(app: &str, now: chrono::DateTime<chrono::Local>) -> String {
@@ -180,6 +182,7 @@ pub fn spawn<R: Runtime>(app: AppHandle<R>) {
     let _ = app;
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))] // only the Windows loop reaches it
 async fn on_started<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
     log::info!("Meeting detected: {name}");
     *CURRENT_APP.lock().unwrap() = Some(name);
@@ -201,6 +204,7 @@ async fn on_started<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
     }
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))] // only the Windows loop reaches it
 async fn on_ended<R: Runtime>(app: &AppHandle<R>) {
     log::info!("Meeting ended");
     *CURRENT_APP.lock().unwrap() = None;
@@ -222,6 +226,7 @@ fn start_recording<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
     let _ = app.emit_to("main", "detector-start-recording", meeting_title(name, chrono::Local::now()));
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))] // only the Windows loop reaches it
 fn open_prompt<R: Runtime>(app: &AppHandle<R>) {
     if app.get_webview_window(PROMPT_LABEL).is_some() {
         return;

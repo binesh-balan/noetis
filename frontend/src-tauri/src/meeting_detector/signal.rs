@@ -83,7 +83,12 @@ pub fn meeting_mic_holders() -> std::io::Result<Vec<&'static str>> {
 mod tests {
     #[test]
     fn reads_the_capability_store() {
-        let entries = super::capability_entries().expect("microphone capability store readable");
+        let entries = match super::capability_entries() {
+            Ok(e) => e,
+            // A machine where no app has used the mic yet has no store.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+            Err(e) => panic!("microphone capability store unreadable: {e}"),
+        };
         assert!(entries.iter().all(|(k, _, _)| !k.is_empty()));
         let windows = super::visible_window_titles();
         for (exe, title) in windows {
