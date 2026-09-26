@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useManagedPolicy } from '@/hooks/useManagedPolicy';
-import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette } from 'lucide-react';
+import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
@@ -13,12 +13,14 @@ import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { TemplateSettings } from '@/components/TemplateSettings';
 import { BetaSettings } from '@/components/BetaSettings';
 import { AppearanceSettings } from '@/components/AppearanceSettings';
+import { SpeakerSettings } from '@/components/SpeakerSettings';
 import { useConfig } from '@/contexts/ConfigContext';
 
 // Tabs configuration (constant)
 const TABS = [
   { value: 'general', label: 'General', icon: Settings2 },
   { value: 'recording', label: 'Recordings', icon: Mic },
+  { value: 'speakers', label: 'Speakers', icon: Users },
   { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
   { value: 'summaryModels', label: 'Summary', icon: SparkleIcon },
   { value: 'templates', label: 'Templates', icon: LayoutTemplate },
@@ -93,6 +95,7 @@ function SettingsContent() {
         <div className="mx-auto max-w-3xl space-y-6 p-8">
           {activeTab === 'general' && (<><OrgAccountSettings /><PreferenceSettings /></>)}
           {activeTab === 'recording' && <RecordingSettings />}
+          {activeTab === 'speakers' && <SpeakerSettings />}
           {activeTab === 'Transcriptionmodels' && (
             <TranscriptSettings transcriptModelConfig={transcriptModelConfig} setTranscriptModelConfig={setTranscriptModelConfig} />
           )}
