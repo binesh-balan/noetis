@@ -1201,4 +1201,60 @@ mod tests {
             }
         }
     }
+
+    /// Voice memory across recordings, label-free: diarize the whole file as reference, enrol
+    /// voices from the first half, match the second half. A match is right when both halves'
+    /// speakers map to the same reference speaker. Needs DIARIZATION_TEST_DIR, DIARIZATION_AUDIO.
+    #[test]
+    #[ignore]
+    fn real_voice_matching() {
+        use crate::voices::{match_voices, MIN_SAMPLE_SECS};
+        let dir = PathBuf::from(std::env::var("DIARIZATION_TEST_DIR").unwrap());
+        let file = PathBuf::from(std::env::var("DIARIZATION_AUDIO").unwrap());
+        let audio = crate::audio::decoder::decode_audio_file(&file).unwrap().to_whisper_format();
+        let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
+        let mut emb = Embedder::load(&dir.join(EMBEDDING_MODEL.file)).unwrap();
+        let params = test_params();
+        let full = diarize(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
+        let mid = audio.len() / 2 / FRAME_STEP_SAMPLES * FRAME_STEP_SAMPLES;
+        let a = diarize(&mut seg, &mut emb, &audio[..mid], &params, |_| {}).unwrap();
+        let b = diarize(&mut seg, &mut emb, &audio[mid..], &params, |_| {}).unwrap();
+
+        // Reference speaker most often under each half-speaker's frames.
+        let majority = |d: &Diarization, offset: usize| -> Vec<Option<usize>> {
+            (0..d.centroids.len())
+                .map(|id| {
+                    let mut counts = std::collections::HashMap::new();
+                    for (f, s) in d.track.iter().enumerate() {
+                        if *s == Some(id) {
+                            if let Some(Some(r)) = full.track.get(offset + f) {
+                                *counts.entry(*r).or_insert(0usize) += 1;
+                            }
+                        }
+                    }
+                    counts.into_iter().max_by_key(|(_, n)| *n).map(|(r, _)| r)
+                })
+                .collect()
+        };
+        let (ra, rb) = (majority(&a, 0), majority(&b, mid / FRAME_STEP_SAMPLES));
+        let secs_a = speech_secs(&a.track, a.centroids.len());
+        let profiles: Vec<(String, Vec<f32>)> = a.centroids.iter().enumerate()
+            .filter(|(i, c)| secs_a[*i] >= MIN_SAMPLE_SECS && !c.is_empty())
+            .map(|(i, c)| (format!("ref{}", ra[i].map_or(99, |r| r)), c.clone()))
+            .collect();
+        println!("reference speakers: {}, enrolled: {}", full.centroids.len(), profiles.len());
+        for t in [0.40f32, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70] {
+            let mut names = vec![None; b.centroids.len()];
+            match_voices(&b.centroids, &mut names, &profiles, t);
+            let (mut right, mut wrong, mut unnamed) = (0, 0, 0);
+            for (i, n) in names.iter().enumerate() {
+                match n {
+                    Some(n) if rb[i].map(|r| format!("ref{r}")).as_deref() == Some(n.as_str()) => right += 1,
+                    Some(_) => wrong += 1,
+                    None => unnamed += 1,
+                }
+            }
+            println!("threshold {t:.2}: right {right}, wrong {wrong}, unnamed {unnamed}");
+        }
+    }
 }
