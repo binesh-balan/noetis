@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FolderOpen } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
@@ -8,12 +9,15 @@ import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useConfig } from '@/contexts/ConfigContext';
 
+export type MeetingDetection = 'off' | 'ask' | 'auto';
+
 export interface RecordingPreferences {
   save_folder: string;
   auto_save: boolean;
   file_format: string;
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
+  meeting_detection?: MeetingDetection;
 }
 
 interface RecordingSettingsProps {
@@ -26,11 +30,13 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     auto_save: true,
     file_format: 'mp4',
     preferred_mic_device: null,
-    preferred_system_device: null
+    preferred_system_device: null,
+    meeting_detection: 'ask'
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
+  const [isWindows, setIsWindows] = useState(false);
   const { isRecording } = useRecordingState();
   const { setSelectedDevices } = useConfig();
 
@@ -70,6 +76,12 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       }
     };
     loadNotificationPref();
+  }, []);
+
+  useEffect(() => {
+    import('@tauri-apps/plugin-os')
+      .then(({ platform }) => setIsWindows(platform() === 'windows'))
+      .catch(() => setIsWindows(false));
   }, []);
 
   const handleAutoSaveToggle = async (enabled: boolean) => {
@@ -127,6 +139,17 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     } catch (error) {
       console.error('Failed to save notification preference:', error);
       toast.error('Failed to save preference');
+    }
+  };
+
+  const handleMeetingDetectionChange = async (value: string) => {
+    const prefs = { ...preferences, meeting_detection: value as MeetingDetection };
+    setPreferences(prefs);
+    try {
+      await invoke('set_recording_preferences', { preferences: prefs });
+      toast.success('Meeting detection updated');
+    } catch (error) {
+      toast.error('Failed to save meeting detection', { description: String(error) });
     }
   };
 
@@ -235,6 +258,28 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           onCheckedChange={handleNotificationToggle}
         />
       </div>
+
+      {/* Meeting Detection Select */}
+      {isWindows && (
+        <div className="flex items-center justify-between gap-4 p-4 border rounded-lg">
+          <div className="flex-1">
+            <div className="font-medium">Meeting Detection</div>
+            <div className="text-sm text-muted-foreground">
+              Notice Zoom, Teams, Meet and other calls using your microphone
+            </div>
+          </div>
+          <Select value={preferences.meeting_detection ?? 'ask'} onValueChange={handleMeetingDetectionChange}>
+            <SelectTrigger className="w-44" aria-label="Meeting detection">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ask">Ask first</SelectItem>
+              <SelectItem value="auto">Record automatically</SelectItem>
+              <SelectItem value="off">Off</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Device Preferences */}
       <div className="space-y-4">
