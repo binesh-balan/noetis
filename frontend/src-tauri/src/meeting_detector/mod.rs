@@ -7,7 +7,7 @@ mod signal;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 /// ponytail: calibration knobs, checked in real calls (spec Part 1).
 pub const POLL: Duration = Duration::from_secs(2);
@@ -212,17 +212,14 @@ async fn on_ended<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Same path as the tray's Start: flag + navigate the main webview to Home, which starts.
+/// Asks the main webview to start (it waits for any previous meeting's post-processing, then
+/// starts through client-side routing, so nothing in flight is reloaded away).
 fn start_recording<R: Runtime>(app: &AppHandle<R>, name: &'static str) {
-    let Some(main) = app.get_webview_window("main") else { return };
+    if app.get_webview_window("main").is_none() {
+        return;
+    }
     DETECTOR_OWNED.store(true, SeqCst);
-    let title = serde_json::to_string(&meeting_title(name, chrono::Local::now())).unwrap_or_else(|_| "\"\"".into());
-    let _ = main.eval(&format!(
-        "sessionStorage.setItem('autoStartRecording','true');\
-         sessionStorage.setItem('autoStartMeetingName',{title});\
-         sessionStorage.setItem('autoStartSource','detector');\
-         window.location.assign('/')"
-    ));
+    let _ = app.emit_to("main", "detector-start-recording", meeting_title(name, chrono::Local::now()));
 }
 
 fn open_prompt<R: Runtime>(app: &AppHandle<R>) {

@@ -20,6 +20,18 @@ const TRANSCRIPTION_RUNTIME_USER_MESSAGE = 'Speech recognition could not initial
 const isTranscriptionRuntimeStartError = (error: unknown) =>
   String(error) === TRANSCRIPTION_RUNTIME_START_ERROR_CODE;
 
+// A detector start (meeting_detector) passes its title and source through sessionStorage.
+// Consume them once, whichever start path runs.
+function takeDetectorStart() {
+  const title = sessionStorage.getItem('autoStartMeetingName');
+  const fromDetector = sessionStorage.getItem('autoStartSource') === 'detector';
+  sessionStorage.removeItem('autoStartMeetingName');
+  sessionStorage.removeItem('autoStartSource');
+  // A detector start happens with the window hidden; surface failures.
+  const revealIfDetector = () => { if (fromDetector) invoke('reveal_main_window').catch(() => undefined); };
+  return { detectorTitle: title, revealIfDetector };
+}
+
 interface UseRecordingStartReturn {
   handleRecordingStart: () => Promise<void>;
   isAutoStarting: boolean;
@@ -217,12 +229,7 @@ export function useRecordingStart(
           setIsAutoStarting(true);
           sessionStorage.removeItem('autoStartRecording'); // Clear the flag
 
-          const detectorTitle = sessionStorage.getItem('autoStartMeetingName');
-          const fromDetector = sessionStorage.getItem('autoStartSource') === 'detector';
-          sessionStorage.removeItem('autoStartMeetingName');
-          sessionStorage.removeItem('autoStartSource');
-          // A detector start happens with the window hidden; surface failures.
-          const revealIfDetector = () => { if (fromDetector) invoke('reveal_main_window').catch(() => undefined); };
+          const { detectorTitle, revealIfDetector } = takeDetectorStart();
 
           // Check the selected transcription model before starting.
           const modelReady = await checkModelReady();
@@ -318,6 +325,7 @@ export function useRecordingStart(
   // Listen for direct recording trigger from sidebar when already on home page
   useEffect(() => {
     const handleDirectStart = async () => {
+      const { detectorTitle, revealIfDetector } = takeDetectorStart();
       if (isRecording || isAutoStarting) {
         console.log('Recording already in progress, ignoring direct start event');
         return;
@@ -344,6 +352,7 @@ export function useRecordingStart(
           showModal?.('modelSelector', 'Transcription model setup required');
           Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_direct');
         }
+        revealIfDetector();
         setStatus(RecordingStatus.IDLE);
         setIsAutoStarting(false);
         return;
@@ -351,7 +360,7 @@ export function useRecordingStart(
 
       try {
         // Generate meeting title
-        const generatedMeetingTitle = generateMeetingTitle();
+        const generatedMeetingTitle = detectorTitle || generateMeetingTitle();
 
         // Set STARTING status before initiating backend recording
         setStatus(RecordingStatus.STARTING, 'Initializing recording...');
@@ -381,6 +390,7 @@ export function useRecordingStart(
           // Benign race — another start won and is live; skip ERROR/alert.
           setStatus(RecordingStatus.RECORDING);
         } else {
+          revealIfDetector();
           const isRuntimeError = isTranscriptionRuntimeStartError(error);
           setStatus(RecordingStatus.ERROR, isRuntimeError
             ? TRANSCRIPTION_RUNTIME_USER_MESSAGE
