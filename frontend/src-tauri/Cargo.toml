@@ -195,6 +195,8 @@ whisper-rs = { version = "0.13.2", features = ["raw-api", "metal", "coreml"] }
 whisper-rs = { version = "0.13.2", features = ["raw-api"] }
 ort = { version = "2.0.0-rc.10", features = ["load-dynamic"] }
 futures-channel = "0.3.31"
+winreg = "0.55"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
 
 # Linux-specific dependencies
 # Default: CPU-only build (no BLAS)

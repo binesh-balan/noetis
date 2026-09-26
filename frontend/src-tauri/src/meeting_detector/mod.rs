@@ -1,6 +1,9 @@
 //! Meeting detection (Windows): notices a call app holding the microphone and offers to
 //! record it. `signal` reads who holds the mic; everything here is pure and unit-tested.
 
+#[cfg(target_os = "windows")]
+mod signal;
+
 use std::time::{Duration, Instant};
 
 /// ponytail: calibration knobs, checked in real calls (spec Part 1).
