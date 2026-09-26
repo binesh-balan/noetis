@@ -293,6 +293,18 @@ fn disown_recording() {
     DETECTOR_OWNED.store(false, SeqCst);
 }
 
+/// Whether a detector start is still wanted: not disowned, and the call hasn't ended.
+#[tauri::command]
+pub fn detector_start_pending() -> bool {
+    DETECTOR_OWNED.load(SeqCst) && CURRENT_APP.lock().unwrap().is_some()
+}
+
+/// Drops ownership of a detector start that was skipped without an error (nothing to reveal).
+#[tauri::command]
+pub fn disown_detector_start() {
+    disown_recording();
+}
+
 /// Shows the main window, e.g. so a detector-started recording's error is visible. Only called
 /// on a failed detector start, so it also disowns the (failed) attempt.
 #[tauri::command]

@@ -92,6 +92,8 @@ function DetectorStartListener({ showOnboarding }: { showOnboarding: boolean }) 
         return reveal();
       }
       const deadline = Date.now() + 3 * 60_000;
+      // ponytail: polls a ref every 500 ms (up to 3 min); fine because this listener lives in the
+      // root layout and never unmounts. Subscribe to status changes if more waiters appear.
       while (latest.current.busy) {
         if (Date.now() > deadline) {
           toast.error("Couldn't record the meeting", {
@@ -100,6 +102,13 @@ function DetectorStartListener({ showOnboarding }: { showOnboarding: boolean }) 
           return reveal();
         }
         await new Promise((r) => setTimeout(r, 500));
+      }
+      // The call may have ended (or the start been disowned) while we waited.
+      if (!(await invoke<boolean>('detector_start_pending').catch(() => false))) return;
+      if (latest.current.busy) {
+        // Something else started recording meanwhile; nothing to reveal.
+        invoke('disown_detector_start').catch(() => undefined);
+        return;
       }
       sessionStorage.setItem('autoStartMeetingName', title);
       sessionStorage.setItem('autoStartSource', 'detector');

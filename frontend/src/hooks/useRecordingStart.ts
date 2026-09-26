@@ -29,7 +29,9 @@ function takeDetectorStart() {
   sessionStorage.removeItem('autoStartSource');
   // A detector start happens with the window hidden; surface failures.
   const revealIfDetector = () => { if (fromDetector) invoke('reveal_main_window').catch(() => undefined); };
-  return { detectorTitle: title, revealIfDetector };
+  // A detector start skipped without an error: drop ownership, keep the window as it is.
+  const disownIfDetector = () => { if (fromDetector) invoke('disown_detector_start').catch(() => undefined); };
+  return { detectorTitle: title, revealIfDetector, disownIfDetector };
 }
 
 interface UseRecordingStartReturn {
@@ -325,8 +327,9 @@ export function useRecordingStart(
   // Listen for direct recording trigger from sidebar when already on home page
   useEffect(() => {
     const handleDirectStart = async () => {
-      const { detectorTitle, revealIfDetector } = takeDetectorStart();
+      const { detectorTitle, revealIfDetector, disownIfDetector } = takeDetectorStart();
       if (isRecording || isAutoStarting) {
+        disownIfDetector();
         console.log('Recording already in progress, ignoring direct start event');
         return;
       }

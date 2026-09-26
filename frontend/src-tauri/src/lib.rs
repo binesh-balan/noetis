@@ -868,6 +868,8 @@ pub fn run() {
             meeting_detector::meeting_prompt_info,
             meeting_detector::meeting_prompt_respond,
             meeting_detector::reveal_main_window,
+            meeting_detector::detector_start_pending,
+            meeting_detector::disown_detector_start,
             audio::retranscription::cancel_retranscription_command,
             audio::retranscription::is_retranscription_in_progress_command,
             // Import audio commands
