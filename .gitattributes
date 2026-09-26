@@ -1,0 +1,3 @@
+# sqlx checksums migration bytes: keep migrations added from now on byte-identical on every OS.
+# (Older migrations are left as they are, since installed databases recorded their current bytes.)
+frontend/src-tauri/migrations/20260926000000_add_voice_samples.sql text eol=lf
