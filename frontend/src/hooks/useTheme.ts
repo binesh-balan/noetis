@@ -5,12 +5,13 @@ export type ThemeChoice = 'system' | 'dark' | 'light';
 const KEY = 'noetis-theme';
 const media = () => window.matchMedia('(prefers-color-scheme: dark)');
 
+// Dark is the default: nothing stored (or unreadable storage) means dark.
 function read(): ThemeChoice {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'dark' || v === 'light' ? v : 'system';
+    return v === 'light' || v === 'system' ? v : 'dark';
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 
@@ -21,7 +22,7 @@ function apply(choice: ThemeChoice): 'dark' | 'light' {
 }
 
 export function useTheme() {
-  const [theme, setThemeState] = useState<ThemeChoice>('system');
+  const [theme, setThemeState] = useState<ThemeChoice>('dark');
   // Seed from the class the boot script already set, so light users don't flash dark.
   const [resolvedTheme, setResolved] = useState<'dark' | 'light'>(() =>
     typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
@@ -44,8 +45,7 @@ export function useTheme() {
 
   const setTheme = useCallback((next: ThemeChoice) => {
     try {
-      if (next === 'system') localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, next);
+      localStorage.setItem(KEY, next);
     } catch {
       /* storage unavailable: theme still applies for this session */
     }
@@ -58,4 +58,4 @@ export function useTheme() {
 }
 
 // Inline, runs before first paint (see layout.tsx). Must mirror read()/apply().
-export const THEME_BOOT_SCRIPT = `(function(){try{var v=localStorage.getItem('${KEY}');var d=v==='dark'||(v!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){document.documentElement.classList.add('dark');}})();`;
+export const THEME_BOOT_SCRIPT = `(function(){try{var v=localStorage.getItem('${KEY}');var d=v==='system'?window.matchMedia('(prefers-color-scheme: dark)').matches:v!=='light';document.documentElement.classList.toggle('dark',d);}catch(e){document.documentElement.classList.add('dark');}})();`;

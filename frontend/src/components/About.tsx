@@ -6,9 +6,57 @@ import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch";
 import { UpdateDialog } from "./UpdateDialog";
 import { updateService, UpdateInfo } from '@/services/updateService';
 import { Button } from './ui/button';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import {
+    Loader2,
+    RefreshCw,
+    Radar,
+    AudioLines,
+    Users,
+    ListChecks,
+    Cpu,
+    ShieldCheck,
+    type LucideIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
+interface Feature {
+    icon: LucideIcon;
+    title: string;
+    body: string;
+}
+
+const FEATURES: Feature[] = [
+    {
+        icon: Radar,
+        title: 'Catches your calls',
+        body: 'On Windows, notices Zoom, Teams, Meet, Slack and more using your mic, asks to record, and stops when the call ends.',
+    },
+    {
+        icon: AudioLines,
+        title: 'Live transcript',
+        body: 'Microphone and system audio transcribed as you talk, with Parakeet or Whisper running on your machine.',
+    },
+    {
+        icon: Users,
+        title: 'Knows who spoke',
+        body: 'Separates speakers after the meeting and remembers voices, so names carry over to the next call.',
+    },
+    {
+        icon: ListChecks,
+        title: 'Summaries & action items',
+        body: 'Key decisions, action items and highlights, from templates you can adapt to any kind of meeting.',
+    },
+    {
+        icon: Cpu,
+        title: 'Your choice of model',
+        body: 'A built-in local model or Ollama, or bring Claude, Groq or OpenRouter when you want them.',
+    },
+    {
+        icon: ShieldCheck,
+        title: 'Private by default',
+        body: 'Audio, transcripts and voiceprints stay on this computer. Nothing is uploaded unless you choose a cloud model.',
+    },
+];
 
 export function About() {
     const analyticsLocked = useManagedPolicy()?.analyticsDisabled ?? false;
@@ -18,7 +66,6 @@ export function About() {
     const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 
     useEffect(() => {
-        // Get current version on mount
         getVersion().then(setCurrentVersion).catch(console.error);
     }, []);
 
@@ -41,90 +88,83 @@ export function About() {
     };
 
     return (
-        <div className="p-4 space-y-4 h-[80vh] overflow-y-auto">
-            {/* Compact Header */}
-            <div className="text-center">
-                <div className="mb-3">
-                    <Image
-                        src="icon_128x128.png"
-                        alt="Noetis Logo"
-                        width={64}
-                        height={64}
-                        className="mx-auto"
-                    />
+        <div className="max-h-[80vh] space-y-6 overflow-y-auto p-1">
+            {/* Identity */}
+            <header className="flex items-center gap-4">
+                <Image
+                    src="icon_128x128.png"
+                    alt=""
+                    width={56}
+                    height={56}
+                    className="h-14 w-14 shrink-0 rounded-xl"
+                />
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Noetis</h1>
+                        <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                            v{currentVersion}
+                        </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Your meeting assistant that never leaves your machine.
+                    </p>
                 </div>
-                {/* <h1 className="text-xl font-bold text-foreground">Noetis</h1> */}
-                <span className="text-sm text-muted-foreground"> v{currentVersion}</span>
-                <p className="text-medium text-muted-foreground mt-1">
-                    Real-time notes and summaries that never leave your machine.
-                </p>
-                <div className="mt-3">
-                    <Button
-                        onClick={handleCheckForUpdates}
-                        disabled={isChecking}
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                    >
-                        {isChecking ? (
-                            <>
-                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                                Checking...
-                            </>
-                        ) : (
-                            <>
-                                <CheckCircle2 className="h-3 w-3 mr-2" />
-                                Check for Updates
-                            </>
-                        )}
-                    </Button>
-                    {updateInfo?.available && (
-                        <div className="mt-2 text-xs text-primary">
-                            Update available: v{updateInfo.version}
-                        </div>
+            </header>
+
+            <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={handleCheckForUpdates} disabled={isChecking} variant="outline" size="sm">
+                    {isChecking ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                        <RefreshCw className="mr-2 h-3.5 w-3.5" />
                     )}
+                    {isChecking ? 'Checking…' : 'Check for updates'}
+                </Button>
+                {updateInfo?.available && (
+                    <button
+                        type="button"
+                        onClick={() => setShowUpdateDialog(true)}
+                        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                        v{updateInfo.version} is available
+                    </button>
+                )}
+            </div>
+
+            {/* What it does */}
+            <section aria-labelledby="about-features">
+                <h2
+                    id="about-features"
+                    className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                >
+                    What Noetis does
+                </h2>
+                <ul className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                    {FEATURES.map(({ icon: Icon, title, body }) => (
+                        <li key={title} className="flex gap-3">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <Icon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <div>
+                                <h3 className="text-sm font-medium text-foreground">{title}</h3>
+                                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{body}</p>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </section>
+
+            {!analyticsLocked && (
+                <div className="border-t border-border pt-4">
+                    <AnalyticsConsentSwitch />
                 </div>
-            </div>
+            )}
 
-            {/* Features Grid - Compact */}
-            <div className="space-y-3">
-                <h2 className="text-base font-semibold text-foreground">What makes Noetis different</h2>
-                <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Privacy-first</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Your data & AI processing workflow can now stay within your premise. No cloud, no leaks.</p>
-                    </div>
-                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Use Any Model</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Prefer local open-source model? Great. Want to plug in an external API? Also fine. No lock-in.</p>
-                    </div>
-                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Cost-Smart</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Avoid pay-per-minute bills by running models locally (or pay only for the calls you choose).</p>
-                    </div>
-                    <div className="bg-muted rounded p-3 hover:bg-accent transition-colors">
-                        <h3 className="font-bold text-sm text-foreground mb-1">Works everywhere</h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Google Meet, Zoom, Teams-online or offline.</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Coming Soon - Compact */}
-            <div className="bg-primary/10 rounded p-3">
-                <p className="text-s text-primary">
-                    <span className="font-bold">Coming soon:</span> A library of on-device AI agents-automating follow-ups, action tracking, and more.
-                </p>
-            </div>
-
-            {!analyticsLocked && <AnalyticsConsentSwitch />}
-
-            {/* Update Dialog */}
             <UpdateDialog
                 open={showUpdateDialog}
                 onOpenChange={setShowUpdateDialog}
                 updateInfo={updateInfo}
             />
         </div>
-
-    )
+    );
 }
