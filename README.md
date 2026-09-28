@@ -77,6 +77,9 @@ copyright notice is retained in the license file as the MIT license requires.
   and [transcribe-rs](https://crates.io/crates/transcribe-rs), from which some code is borrowed.
 - **NVIDIA** for the **Parakeet** model, and [istupakov](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
   for its ONNX conversion.
+- **NVIDIA** for the [Nemotron 3 Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization) speaker model
+  (OpenMDW-1.1; ONNX export by [onnx-community](https://huggingface.co/onnx-community/Nemotron-3-Diarization-ONNX)),
+  the primary speaker engine.
 - [pyannote.audio](https://github.com/pyannote/pyannote-audio) for the segmentation-3.0 speaker-turn model
   ([MIT](https://huggingface.co/pyannote/segmentation-3.0); ONNX export by
   [onnx-community](https://huggingface.co/onnx-community/pyannote-segmentation-3.0)) and the diarization recipe, and

@@ -1,5 +1,8 @@
-//! Post-recording speaker identification ("who said what"), fully on-device, following the
-//! pyannote 3.1 recipe:
+//! Post-recording speaker identification ("who said what"), fully on-device.
+//!
+//! Primary engine: NVIDIA Nemotron 3 Diarization (`crate::nemotron`), which gives a 10 ms speaker
+//! track directly; WeSpeaker then embeds each speaker's speech for voice memory. When Nemotron is
+//! unavailable or fails, the fallback follows the pyannote 3.1 recipe:
 //!
 //! 1. **Segmentation** — pyannote segmentation-3.0 (ONNX, MIT) over sliding 10 s windows gives,
 //!    every ~17 ms, which of up to 3 local speakers is talking (overlap included).
@@ -46,6 +49,28 @@ const SEGMENTATION_MODEL: ModelFile = ModelFile {
     bytes: 5_986_908,
     sha256: "057ee564753071c0b09b5b611648b50ac188d50846bff5f01e9f7bbf1591ea25",
 };
+
+/// NVIDIA Nemotron 3 Diarization (streaming Sortformer, OpenMDW-1.1), fp32 ONNX export: the
+/// graph and its external weights, which must sit side by side under these exact names.
+/// The int8/q4 exports need 8-bit MatMulNBits, which the bundled ONNX Runtime 1.22 lacks.
+const NEMOTRON_WEIGHTS: ModelFile = ModelFile {
+    file: "nemotron-3-diarization/model.onnx_data",
+    url: "https://huggingface.co/onnx-community/Nemotron-3-Diarization-ONNX/resolve/353b6f8ad2cac3580e982d7fbdf0a010786b0406/onnx/model.onnx_data",
+    bytes: 398_184_448,
+    sha256: "c293d9b5930eb9f6172f095ced052c0d1bbdbeb2594a115497583ca209b1dbd6",
+};
+
+const NEMOTRON_MODEL: ModelFile = ModelFile {
+    file: "nemotron-3-diarization/model.onnx",
+    url: "https://huggingface.co/onnx-community/Nemotron-3-Diarization-ONNX/resolve/353b6f8ad2cac3580e982d7fbdf0a010786b0406/onnx/model.onnx",
+    bytes: 303_466,
+    sha256: "12a7c98fc1ee6ec98ea728c7ffd9fcf6b245f3c9c1ea9f7c2a7cc47c023e3f9d",
+};
+
+/// Speech per speaker fed to WeSpeaker for a Nemotron speaker's voiceprint.
+/// ponytail: first 60 s of each speaker only; spread samples across the meeting if voice
+/// matching turns out weaker than with the pyannote centroids.
+const MAX_CENTROID_SECS: f64 = 60.0;
 
 const SAMPLE_RATE: f64 = 16_000.0;
 /// Segmentation window and hop (pyannote trains on 10 s chunks).
@@ -485,21 +510,68 @@ fn extract(
     Ok(x)
 }
 
-/// Frame-level speaker track plus each speaker's centroid embedding (L2-normalised, indexed by id).
+/// Frame-level speaker track (`frame_secs` per frame) plus each speaker's centroid embedding
+/// (L2-normalised, indexed by id; empty when the speaker had too little speech).
 pub(crate) struct Diarization {
     pub track: Vec<Option<usize>>,
     pub centroids: Vec<Vec<f32>>,
+    pub frame_secs: f64,
 }
 
 /// Seconds of speech per speaker id in a frame track.
-pub(crate) fn speech_secs(track: &[Option<usize>], k: usize) -> Vec<f64> {
+pub(crate) fn speech_secs(track: &[Option<usize>], k: usize, frame_secs: f64) -> Vec<f64> {
     let mut secs = vec![0.0; k];
     for id in track.iter().flatten() {
         if *id < k {
-            secs[*id] += FRAME_SECS;
+            secs[*id] += frame_secs;
         }
     }
     secs
+}
+
+/// Nemotron's 10 ms track, ids renumbered by first appearance, plus a WeSpeaker centroid per
+/// speaker (Nemotron has no embeddings of its own) so voice memory works as with pyannote.
+fn diarize_nemotron(
+    diarizer: &mut crate::nemotron::Diarizer,
+    embedder: &mut Embedder,
+    audio: &[f32],
+    progress: impl FnMut(f64),
+) -> Result<Diarization> {
+    let raw = crate::nemotron::diarize(diarizer, audio, progress)?;
+    let mut order: Vec<usize> = Vec::new();
+    let track: Vec<Option<usize>> = raw
+        .iter()
+        .map(|s| {
+            s.map(|s| order.iter().position(|&o| o == s).unwrap_or_else(|| {
+                order.push(s);
+                order.len() - 1
+            }))
+        })
+        .collect();
+    let step = (crate::nemotron::FRAME_SECS * SAMPLE_RATE) as usize;
+    let cap = (MAX_CENTROID_SECS * SAMPLE_RATE) as usize;
+    let mut clips = vec![Vec::new(); order.len()];
+    for (f, s) in track.iter().enumerate() {
+        let Some(s) = *s else { continue };
+        let a = (f * step).min(audio.len());
+        if clips[s].len() < cap {
+            clips[s].extend_from_slice(&audio[a..(a + step).min(audio.len())]);
+        }
+    }
+    let centroids = clips
+        .iter()
+        .enumerate()
+        .map(|(id, clip)| {
+            if (clip.len() as f64) < MIN_EMBED_SECS * SAMPLE_RATE {
+                return Vec::new();
+            }
+            embedder.embed(clip).unwrap_or_else(|e| {
+                warn!("No voiceprint for speaker {}: {}", id + 1, e);
+                Vec::new()
+            })
+        })
+        .collect();
+    Ok(Diarization { track, centroids, frame_secs: crate::nemotron::FRAME_SECS })
 }
 
 impl Extracted {
@@ -544,7 +616,7 @@ impl Extracted {
                     .filter(|&best| cover[g] > 0 && row[best] > 0.0 && row[best] >= 0.5 * cover[g] as f32)
             })
             .collect();
-        Diarization { track, centroids }
+        Diarization { track, centroids, frame_secs: FRAME_SECS }
     }
 }
 
@@ -560,10 +632,10 @@ fn diarize(
 }
 
 /// Turns within one line (start, end in seconds): runs of the dominant speaker on the frame
-/// track, with runs shorter than MIN_TURN_SECS absorbed into a neighbour. Returns
+/// track (`frame_secs` per frame), with runs shorter than MIN_TURN_SECS absorbed into a neighbour. Returns
 /// (speaker, start, end) covering exactly the line, or empty if nobody was detected.
-pub(crate) fn line_turns(track: &[Option<usize>], span: (f64, f64), min_turn_secs: f64) -> Vec<(usize, f64, f64)> {
-    let (from, to) = ((span.0 / FRAME_SECS) as usize, ((span.1 / FRAME_SECS) as usize).min(track.len()));
+pub(crate) fn line_turns(track: &[Option<usize>], span: (f64, f64), min_turn_secs: f64, frame_secs: f64) -> Vec<(usize, f64, f64)> {
+    let (from, to) = ((span.0 / frame_secs) as usize, ((span.1 / frame_secs) as usize).min(track.len()));
     // (speaker, frames, first frame, last frame)
     let mut runs: Vec<(usize, usize, usize, usize)> = Vec::new();
     for f in from..to {
@@ -573,7 +645,7 @@ pub(crate) fn line_turns(track: &[Option<usize>], span: (f64, f64), min_turn_sec
             _ => runs.push((s, 1, f, f)),
         }
     }
-    let min_frames = (min_turn_secs / FRAME_SECS) as usize;
+    let min_frames = (min_turn_secs / frame_secs) as usize;
     loop {
         let short = (runs.len() > 1).then(|| runs.iter().position(|r| r.1 < min_frames)).flatten();
         let Some(i) = short else { break };
@@ -604,8 +676,8 @@ pub(crate) fn line_turns(track: &[Option<usize>], span: (f64, f64), min_turn_sec
     runs.iter()
         .enumerate()
         .map(|(i, r)| {
-            let start = if i == 0 { span.0 } else { ((runs[i - 1].3 + r.2 + 1) as f64 / 2.0) * FRAME_SECS };
-            let end = if i + 1 == n { span.1 } else { ((r.3 + runs[i + 1].2 + 1) as f64 / 2.0) * FRAME_SECS };
+            let start = if i == 0 { span.0 } else { ((runs[i - 1].3 + r.2 + 1) as f64 / 2.0) * frame_secs };
+            let end = if i + 1 == n { span.1 } else { ((r.3 + runs[i + 1].2 + 1) as f64 / 2.0) * frame_secs };
             (r.0, start, end)
         })
         .collect()
@@ -720,7 +792,7 @@ async fn ensure_model<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, m: &Mode
             "The speaker models must be downloaded once, but Strict Offline Mode is on"
         ));
     }
-    tokio::fs::create_dir_all(&dir).await?;
+    tokio::fs::create_dir_all(path.parent().unwrap_or(&dir)).await?;
     emit_progress(app, meeting_id, "downloading", 0, "Downloading speaker models...");
 
     let mut response = reqwest::Client::new().get(m.url).send().await?.error_for_status()?;
@@ -793,7 +865,17 @@ type Row = (String, Option<f64>, Option<f64>, String, String);
 
 async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Path) -> Result<usize> {
     let embedding_path = ensure_model(app, meeting_id, &EMBEDDING_MODEL).await?;
-    let segmentation_path = ensure_model(app, meeting_id, &SEGMENTATION_MODEL).await?;
+    // Nemotron first (more accurate on real meetings); pyannote segmentation if it's unavailable.
+    let nemotron_path = match ensure_model(app, meeting_id, &NEMOTRON_WEIGHTS).await {
+        Ok(_) => ensure_model(app, meeting_id, &NEMOTRON_MODEL).await,
+        Err(e) => Err(e),
+    }
+    .map_err(|e| warn!("Nemotron speaker model unavailable, using pyannote: {}", e))
+    .ok();
+    let segmentation_path = match nemotron_path {
+        Some(_) => None,
+        None => Some(ensure_model(app, meeting_id, &SEGMENTATION_MODEL).await?),
+    };
 
     let pool = app
         .try_state::<AppState>()
@@ -823,24 +905,38 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
 
     emit_progress(app, meeting_id, "analyzing", 25, "Analyzing voices...");
     let (app_for_task, meeting, audio) = (app.clone(), meeting_id.to_string(), samples.clone());
-    let Diarization { track, centroids } = tokio::task::spawn_blocking(move || -> Result<Diarization> {
-        let mut segmenter = Segmenter::load(&segmentation_path).context("loading segmentation model")?;
+    let Diarization { track, centroids, frame_secs } = tokio::task::spawn_blocking(move || -> Result<Diarization> {
         let mut embedder = Embedder::load(&embedding_path).context("loading speaker model")?;
         let mut last = 0u32;
-        diarize(&mut segmenter, &mut embedder, &audio, &Params::default(), |done| {
+        let mut progress = |done: f64| {
             let pct = 25 + (done * 60.0) as u32;
             if pct != last {
                 last = pct;
                 emit_progress(&app_for_task, &meeting, "analyzing", pct, "Analyzing voices...");
             }
-        })
+        };
+        if let Some(path) = &nemotron_path {
+            let nemotron = crate::nemotron::Diarizer::load(path)
+                .and_then(|mut d| diarize_nemotron(&mut d, &mut embedder, &audio, &mut progress));
+            match nemotron {
+                Ok(d) => return Ok(d),
+                Err(e) => warn!("Nemotron diarization failed, using pyannote: {}", e),
+            }
+        }
+        // Fallback: Nemotron wasn't supplied/allowed, or failed to run.
+        let segmentation_path = match segmentation_path {
+            Some(p) => p,
+            None => tokio::runtime::Handle::current().block_on(ensure_model(&app_for_task, &meeting, &SEGMENTATION_MODEL))?,
+        };
+        let mut segmenter = Segmenter::load(&segmentation_path).context("loading segmentation model")?;
+        diarize(&mut segmenter, &mut embedder, &audio, &Params::default(), progress)
     })
     .await??;
     let k = centroids.len();
-    let secs = speech_secs(&track, k);
+    let secs = speech_secs(&track, k, frame_secs);
     // Meeting-app hints first, then known voices.
     let hints = crate::speaker_hints::load(folder);
-    let mut names = crate::speaker_hints::names_from_hints(&track, k, FRAME_SECS, &hints);
+    let mut names = crate::speaker_hints::names_from_hints(&track, k, frame_secs, &hints);
     match crate::voices::load_profiles(&pool, meeting_id).await {
         Ok(profiles) => crate::voices::match_voices(&centroids, &mut names, &profiles, crate::voices::VOICE_MATCH_THRESHOLD),
         Err(e) => warn!("Voice memory unavailable for {}: {}", meeting_id, e),
@@ -849,7 +945,7 @@ async fn identify<R: Runtime>(app: &AppHandle<R>, meeting_id: &str, folder: &Pat
 
     // Turns per line; lines without detected speech inherit the nearest line's speaker.
     let mut turns: Vec<Vec<(usize, f64, f64)>> =
-        rows.iter().map(|r| r.1.zip(r.2).map_or(Vec::new(), |span| line_turns(&track, span, MIN_TURN_SECS))).collect();
+        rows.iter().map(|r| r.1.zip(r.2).map_or(Vec::new(), |span| line_turns(&track, span, MIN_TURN_SECS, frame_secs))).collect();
     let mut first: Vec<Option<usize>> = turns.iter().map(|t| t.first().map(|x| x.0)).collect();
     fill_gaps(&mut first);
 
@@ -1045,12 +1141,12 @@ mod tests {
         track[f(4.0)..f(4.2)].iter_mut().for_each(|x| *x = Some(2)); // 0.2 s blip
         track[f(4.2)..f(6.0)].iter_mut().for_each(|x| *x = Some(0));
         track[f(6.0)..f(10.0)].iter_mut().for_each(|x| *x = Some(1));
-        let t = line_turns(&track, (0.0, 10.0), 0.6);
+        let t = line_turns(&track, (0.0, 10.0), 0.6, FRAME_SECS);
         assert_eq!(t.len(), 2, "{t:?}");
         assert_eq!((t[0].0, t[1].0), (0, 1));
         assert!((t[0].2 - 6.0).abs() < 0.05 && t[0].2 == t[1].1);
         assert_eq!((t[0].1, t[1].2), (0.0, 10.0));
-        assert!(line_turns(&vec![None; 100], (0.0, 1.0), 0.6).is_empty());
+        assert!(line_turns(&vec![None; 100], (0.0, 1.0), 0.6, FRAME_SECS).is_empty());
 
         let words: Vec<(String, f64)> = [("I'd", 0.1), ("rather", 1.0), ("be", 3.0), ("What", 6.5), ("is", 7.0)]
             .iter().map(|(w, t)| (w.to_string(), *t)).collect();
@@ -1069,7 +1165,7 @@ mod tests {
     #[test]
     fn speech_secs_counts_frames_per_speaker() {
         let track = vec![Some(0), Some(0), None, Some(1)];
-        let s = speech_secs(&track, 2);
+        let s = speech_secs(&track, 2, FRAME_SECS);
         assert!((s[0] - 2.0 * FRAME_SECS).abs() < 1e-9 && (s[1] - FRAME_SECS).abs() < 1e-9);
     }
 
@@ -1139,7 +1235,7 @@ mod tests {
 
         let mut asr = crate::parakeet_engine::ParakeetModel::new(std::env::var("PARAKEET_DIR").unwrap(), true).unwrap();
         let words = words_from_tokens(&asr.transcribe_samples(audio.clone()).unwrap());
-        let turns = line_turns(&track, (0.0, audio.len() as f64 / SAMPLE_RATE), params.min_turn_secs);
+        let turns = line_turns(&track, (0.0, audio.len() as f64 / SAMPLE_RATE), params.min_turn_secs, FRAME_SECS);
         for ((spk, a, b), text) in turns.iter().zip(split_words(&words, 0.0, &turns)) {
             println!("[{a:5.1}s - {b:5.1}s] Speaker {}: {text}", spk + 1);
         }
@@ -1157,29 +1253,40 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(folder.join("transcripts.json")).unwrap()).unwrap();
         let audio_path = crate::audio::retranscription::find_audio_file(&folder).unwrap();
         let audio = crate::audio::decoder::decode_audio_file(&audio_path).unwrap().to_whisper_format();
-        let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
         let mut emb = Embedder::load(&dir.join(EMBEDDING_MODEL.file)).unwrap();
         let params = test_params();
         let started = std::time::Instant::now();
-        let extracted = extract(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
-        println!("extracted {:.0}s of audio in {:.1}s ({} embeddings)", audio.len() as f64 / SAMPLE_RATE, started.elapsed().as_secs_f64(), extracted.embeddings.len());
-        let thresholds: Vec<f32> = std::env::var("DIAR_THRESHOLDS").ok()
-            .map(|v| v.split(',').filter_map(|t| t.parse().ok()).collect())
-            .unwrap_or_else(|| vec![params.threshold]);
+        // NEMOTRON_MODEL (path to model.onnx) runs Nemotron; otherwise pyannote per threshold.
+        let runs: Vec<(String, Diarization)> = match std::env::var("NEMOTRON_MODEL") {
+            Ok(m) => {
+                let mut d = crate::nemotron::Diarizer::load(Path::new(&m)).unwrap();
+                vec![("nemotron".to_string(), diarize_nemotron(&mut d, &mut emb, &audio, |_| {}).unwrap())]
+            }
+            Err(_) => {
+                let mut seg = Segmenter::load(&dir.join(SEGMENTATION_MODEL.file)).unwrap();
+                let extracted = extract(&mut seg, &mut emb, &audio, &params, |_| {}).unwrap();
+                let thresholds: Vec<f32> = std::env::var("DIAR_THRESHOLDS").ok()
+                    .map(|v| v.split(',').filter_map(|t| t.parse().ok()).collect())
+                    .unwrap_or_else(|| vec![params.threshold]);
+                thresholds.iter().map(|th| (format!("threshold {th:.2}"), extracted.resolve(*th))).collect()
+            }
+        };
+        println!("diarized {:.0}s of audio in {:.1}s", audio.len() as f64 / SAMPLE_RATE, started.elapsed().as_secs_f64());
         let truth: Option<Vec<serde_json::Value>> = std::fs::read_to_string(folder.join("truth.json")).ok()
             .map(|t| serde_json::from_str(&t).unwrap());
-        let mut track = Vec::new();
-        for &th in &thresholds {
-            track = extracted.resolve(th).track;
+        let n_runs = runs.len();
+        let (mut track, mut frame_secs) = (Vec::new(), FRAME_SECS);
+        for (label, d) in runs {
+            (track, frame_secs) = (d.track, d.frame_secs);
             let found: std::collections::BTreeSet<usize> = track.iter().flatten().copied().collect();
-            print!("threshold {th:.2}: speakers found {}", found.len());
+            print!("{label}: speakers found {} (voiceprints {})", found.len(), d.centroids.iter().filter(|c| !c.is_empty()).count());
             // Frame accuracy with a many-to-one mapping of predicted speakers to true ones.
             if let Some(truth) = &truth {
                 let mut pairs = Vec::new(); // (predicted, true) per speech frame
                 for turn in truth {
                     let (a, b) = (turn["start"].as_f64().unwrap(), turn["end"].as_f64().unwrap());
                     let spk = turn["speaker"].as_u64().unwrap() as usize;
-                    for f in (a / FRAME_SECS) as usize..((b / FRAME_SECS) as usize).min(track.len()) {
+                    for f in (a / frame_secs) as usize..((b / frame_secs) as usize).min(track.len()) {
                         pairs.push((track[f], spk));
                     }
                 }
@@ -1190,17 +1297,21 @@ mod tests {
                     map.insert(p, best);
                 }
                 let correct = pairs.iter().filter(|(p, t)| p.and_then(|p| map.get(&p)) == Some(t)).count();
-                print!(" | ACCURACY {:.1}% (true speakers {n_true})", 100.0 * correct as f64 / pairs.len() as f64);
+                let missed = pairs.iter().filter(|(p, _)| p.is_none()).count();
+                print!(" | ACCURACY {:.1}% | missed {:.1}% | wrong speaker {:.1}% (true speakers {n_true})",
+                    100.0 * correct as f64 / pairs.len() as f64,
+                    100.0 * missed as f64 / pairs.len() as f64,
+                    100.0 * (pairs.len() - correct - missed) as f64 / pairs.len() as f64);
             }
             println!();
         }
-        if thresholds.len() > 1 {
+        if n_runs > 1 {
             return;
         }
         for s in json["segments"].as_array().unwrap() {
             let (a, b) = (s["audio_start_time"].as_f64().unwrap(), s["audio_end_time"].as_f64().unwrap());
             let text = s["text"].as_str().unwrap();
-            let t = line_turns(&track, (a, b), params.min_turn_secs);
+            let t = line_turns(&track, (a, b), params.min_turn_secs, frame_secs);
             let texts = split_words(&words_evenly(text, b - a), a, &t);
             for ((spk, x, y), txt) in t.iter().zip(texts) {
                 println!("[{x:6.1}-{y:6.1}] Speaker {}: {}", spk + 1, txt.chars().take(80).collect::<String>());
@@ -1246,7 +1357,7 @@ mod tests {
                 .collect()
         };
         let (ra, rb) = (majority(&a, 0), majority(&b, mid / FRAME_STEP_SAMPLES));
-        let secs_a = speech_secs(&a.track, a.centroids.len());
+        let secs_a = speech_secs(&a.track, a.centroids.len(), a.frame_secs);
         let profiles: Vec<(String, Vec<f32>)> = a.centroids.iter().enumerate()
             .filter(|(i, c)| secs_a[*i] >= MIN_SAMPLE_SECS && !c.is_empty())
             .map(|(i, c)| (format!("ref{}", ra[i].map_or(99, |r| r)), c.clone()))

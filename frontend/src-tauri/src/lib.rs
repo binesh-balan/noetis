@@ -44,6 +44,7 @@ pub mod database;
 pub mod diarization;
 pub mod entra;
 pub mod meeting_detector;
+pub mod nemotron;
 pub mod network_policy;
 pub mod notifications;
 pub mod ollama;

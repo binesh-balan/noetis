@@ -13,6 +13,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 # Pinned commits and hashes; must match frontend/src-tauri/src (parakeet_engine.rs, diarization.rs).
 $parakeet = 'https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce'
+$nemotron = 'https://huggingface.co/onnx-community/Nemotron-3-Diarization-ONNX/resolve/353b6f8ad2cac3580e982d7fbdf0a010786b0406/onnx'
 $files = @(
     @{ Url = "$parakeet/encoder-model.int8.onnx";       Path = 'parakeet\parakeet-tdt-0.6b-v3-int8\encoder-model.int8.onnx';       Size = 652183999; Sha = '6139d2fa7e1b086097b277c7149725edbab89cc7c7ae64b23c741be4055aff09' },
     @{ Url = "$parakeet/decoder_joint-model.int8.onnx"; Path = 'parakeet\parakeet-tdt-0.6b-v3-int8\decoder_joint-model.int8.onnx'; Size = 18202004;  Sha = 'eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70' },
@@ -21,7 +22,10 @@ $files = @(
     @{ Url = 'https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34/resolve/ff1ac5bca8ef11e90662b879aa923979e0bd277b/voxceleb_resnet34.onnx'
        Path = 'diarization\voxceleb_resnet34.onnx'; Size = 26534127; Sha = '9fea6516d7ad6bf0a76c7689f5a49b65d330fad6dde96c91bb4435ffbfe056a1' },
     @{ Url = 'https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/733a93b6473d019a773298e08cefa686894b1854/onnx/model.onnx'
-       Path = 'diarization\segmentation-3.0.onnx'; Size = 5986908; Sha = '057ee564753071c0b09b5b611648b50ac188d50846bff5f01e9f7bbf1591ea25' }
+       Path = 'diarization\segmentation-3.0.onnx'; Size = 5986908; Sha = '057ee564753071c0b09b5b611648b50ac188d50846bff5f01e9f7bbf1591ea25' },
+    # NVIDIA Nemotron 3 Diarization (OpenMDW-1.1): the primary speaker engine. Both files, same folder.
+    @{ Url = "$nemotron/model.onnx";      Path = 'diarization\nemotron-3-diarization\model.onnx';      Size = 303466;    Sha = '12a7c98fc1ee6ec98ea728c7ffd9fcf6b245f3c9c1ea9f7c2a7cc47c023e3f9d' },
+    @{ Url = "$nemotron/model.onnx_data"; Path = 'diarization\nemotron-3-diarization\model.onnx_data'; Size = 398184448; Sha = 'c293d9b5930eb9f6172f095ced052c0d1bbdbeb2594a115497583ca209b1dbd6' }
 )
 
 foreach ($f in $files) {
