@@ -43,7 +43,7 @@ export function OnboardingContainer({
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+    <div className="flex min-h-full items-center justify-center bg-background p-6">
       <div
         className={cn(
           'flex w-full max-w-lg max-h-[90vh] flex-col rounded-lg border border-border bg-card p-8',

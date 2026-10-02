@@ -9,6 +9,7 @@ import { CommandPalette } from '@/components/CommandPalette'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { useRouter } from 'next/navigation'
 import MainContent from '@/components/MainContent'
+import { TitleBar } from '@/components/TitleBar'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
@@ -134,7 +135,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
     'mod+,': () => router.push('/settings'),
   });
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-full overflow-hidden bg-background text-foreground">
       <Sidebar />
       <MainContent>{children}</MainContent>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
@@ -333,11 +334,16 @@ export default function RootLayout({
                               <DetectorStartListener showOnboarding={showOnboarding} />
 
                               {/* Show onboarding or main app */}
-                              {showOnboarding ? (
-                                <OnboardingFlow onComplete={handleOnboardingComplete} />
-                              ) : (
-                                <AppShell>{children}</AppShell>
-                              )}
+                              <div className="flex h-screen flex-col">
+                                <TitleBar />
+                                <div className="min-h-0 flex-1 overflow-auto">
+                                  {showOnboarding ? (
+                                    <OnboardingFlow onComplete={handleOnboardingComplete} />
+                                  ) : (
+                                    <AppShell>{children}</AppShell>
+                                  )}
+                                </div>
+                              </div>
                               {/* Import audio overlay and dialog */}
                               <ImportDropOverlay visible={showDropOverlay} />
                               <ConditionalImportDialog
