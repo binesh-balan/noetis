@@ -22,6 +22,45 @@ export function PreferenceSettings() {
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
   const hasTrackedViewRef = useRef(false);
 
+  // Strict Offline Mode (security/reports/03-offline-architecture.md,
+  // security/RESIDUAL_RISKS.md #3) — previously no such setting existed anywhere.
+  const [strictOfflineMode, setStrictOfflineModeState] = useState<boolean | null>(null);
+  const [forgetKeysStatus, setForgetKeysStatus] = useState<'idle' | 'confirm' | 'done'>('idle');
+
+  useEffect(() => {
+    invoke<boolean>('api_get_strict_offline_mode')
+      .then(setStrictOfflineModeState)
+      .catch((error) => {
+        console.error('Failed to load Strict Offline Mode setting:', error);
+        setStrictOfflineModeState(false);
+      });
+  }, []);
+
+  const handleStrictOfflineToggle = async (enabled: boolean) => {
+    setStrictOfflineModeState(enabled);
+    try {
+      await invoke('api_set_strict_offline_mode', { enabled });
+      await Analytics.track('settings_changed', { setting: 'strict_offline_mode', value: enabled.toString() });
+    } catch (error) {
+      console.error('Failed to update Strict Offline Mode:', error);
+      setStrictOfflineModeState(!enabled);
+    }
+  };
+
+  const handleForgetAllApiKeys = async () => {
+    if (forgetKeysStatus !== 'confirm') {
+      setForgetKeysStatus('confirm');
+      return;
+    }
+    try {
+      await invoke('api_forget_all_api_keys');
+      setForgetKeysStatus('done');
+    } catch (error) {
+      console.error('Failed to clear stored API keys:', error);
+      setForgetKeysStatus('idle');
+    }
+  };
+
   // Lazy load preferences on mount (only loads if not already cached)
   useEffect(() => {
     loadPreferences();
@@ -149,33 +188,33 @@ export function PreferenceSettings() {
   return (
     <div className="space-y-6">
       {/* Notifications Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Notifications</h3>
-            <p className="text-sm text-gray-600">Enable or disable notifications of start and end of meeting</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Notifications</h3>
+            <p className="text-sm text-muted-foreground">Enable or disable notifications of start and end of meeting</p>
           </div>
           <Switch checked={notificationsEnabledValue} onCheckedChange={setNotificationsEnabled} />
         </div>
       </div>
 
       {/* Data Storage Locations Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Storage Locations</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          View and access where Meetily stores your data
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Data Storage Locations</h3>
+        <p className="text-sm text-muted-foreground mb-6">
+          View and access where Noetis stores your data
         </p>
 
         <div className="space-y-4">
           {/* Database Location */}
-          {/* <div className="p-4 border rounded-lg bg-gray-50">
+          {/* <div className="p-4 border rounded-lg bg-muted">
             <div className="font-medium mb-2">Database</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
+            <div className="text-sm text-muted-foreground mb-3 break-all font-mono text-xs">
               {storageLocations?.database || 'Loading...'}
             </div>
             <button
               onClick={() => handleOpenFolder('database')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-md hover:bg-muted transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
               Open Folder
@@ -183,14 +222,14 @@ export function PreferenceSettings() {
           </div> */}
 
           {/* Models Location */}
-          {/* <div className="p-4 border rounded-lg bg-gray-50">
+          {/* <div className="p-4 border rounded-lg bg-muted">
             <div className="font-medium mb-2">Whisper Models</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
+            <div className="text-sm text-muted-foreground mb-3 break-all font-mono text-xs">
               {storageLocations?.models || 'Loading...'}
             </div>
             <button
               onClick={() => handleOpenFolder('models')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-md hover:bg-muted transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
               Open Folder
@@ -198,14 +237,14 @@ export function PreferenceSettings() {
           </div> */}
 
           {/* Recordings Location */}
-          <div className="p-4 border rounded-lg bg-gray-50">
+          <div className="p-4 border rounded-lg bg-muted">
             <div className="font-medium mb-2">Meeting Recordings</div>
-            <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
+            <div className="text-sm text-muted-foreground mb-3 break-all font-mono text-xs">
               {storageLocations?.recordings || 'Loading...'}
             </div>
             <button
               onClick={() => handleOpenFolder('recordings')}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-md hover:bg-muted transition-colors"
             >
               <FolderOpen className="w-4 h-4" />
               Open Folder
@@ -213,15 +252,59 @@ export function PreferenceSettings() {
           </div>
         </div>
 
-        <div className="mt-4 p-3 bg-blue-50 rounded-md">
-          <p className="text-xs text-blue-800">
+        <div className="mt-4 p-3 bg-primary/10 rounded-md">
+          <p className="text-xs text-primary">
             <strong>Note:</strong> Database and models are stored together in your application data directory for unified management.
           </p>
         </div>
       </div>
 
+      {/* Privacy & Offline Section */}
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Privacy &amp; Offline</h3>
+
+        <div className="flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-medium text-foreground">Strict Offline Mode</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Blocks all cloud AI providers (OpenAI, Claude, Groq, OpenRouter, custom endpoints) and the
+              update check. Ollama is still allowed, but only if it resolves to a genuinely local address.
+            </p>
+          </div>
+          <Switch
+            checked={strictOfflineMode ?? false}
+            onCheckedChange={handleStrictOfflineToggle}
+            disabled={strictOfflineMode === null}
+          />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+          <div className="pr-4">
+            <div className="font-medium text-foreground">Forget All API Keys</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Permanently removes every stored cloud provider API key from this device.
+            </p>
+          </div>
+          <button
+            onClick={handleForgetAllApiKeys}
+            disabled={forgetKeysStatus === 'done'}
+            className={`px-3 py-2 text-sm rounded-md border transition-colors whitespace-nowrap ${
+              forgetKeysStatus === 'confirm'
+                ? 'border-destructive bg-destructive text-primary-foreground hover:bg-destructive'
+                : 'border-border hover:bg-muted'
+            }`}
+          >
+            {forgetKeysStatus === 'done'
+              ? 'Cleared'
+              : forgetKeysStatus === 'confirm'
+              ? 'Click again to confirm'
+              : 'Forget All Keys'}
+          </button>
+        </div>
+      </div>
+
       {/* Analytics Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
         <AnalyticsConsentSwitch />
       </div>
     </div>

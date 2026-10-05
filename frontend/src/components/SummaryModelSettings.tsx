@@ -7,6 +7,7 @@ import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal
 import { SummaryLanguageSettings } from '@/components/SummaryLanguageSettings';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
+import { useManagedPolicy } from '@/hooks/useManagedPolicy';
 
 interface SummaryModelSettingsProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -22,6 +23,7 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
   });
 
   const { isAutoSummary, toggleIsAutoSummary } = useConfig();
+  const managed = useManagedPolicy();
 
   // Reusable fetch function
   const fetchModelConfig = useCallback(async () => {
@@ -124,11 +126,11 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
 
   return (
     <div className='flex flex-col gap-4'>
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Auto Summary</h3>
-            <p className="text-sm text-gray-600">Auto Generating summary after meeting completion(Stopping)</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Auto Summary</h3>
+            <p className="text-sm text-muted-foreground">Auto Generating summary after meeting completion(Stopping)</p>
           </div>
           <Switch checked={isAutoSummary} onCheckedChange={toggleIsAutoSummary} />
         </div>
@@ -136,19 +138,26 @@ export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsPro
 
       <SummaryLanguageSettings />
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">Summary Model Configuration</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          Configure the AI model used for generating meeting summaries.
-        </p>
+      {/* Hidden entirely when the organization manages the summary model. */}
+      {managed?.error ? (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+          AI summaries are unavailable: your organization's configuration could not be loaded. Contact IT.
+        </div>
+      ) : managed && !managed.summaryManaged && (
+        <div className="bg-background rounded-lg border border-border p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Summary Model Configuration</h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            Configure the AI model used for generating meeting summaries.
+          </p>
 
-        <ModelSettingsModal
-          modelConfig={modelConfig}
-          setModelConfig={setModelConfig}
-          onSave={handleSaveModelConfig}
-          skipInitialFetch={true}
-        />
-      </div>
+          <ModelSettingsModal
+            modelConfig={modelConfig}
+            setModelConfig={setModelConfig}
+            onSave={handleSaveModelConfig}
+            skipInitialFetch={true}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { updateService, UpdateInfo } from '@/services/updateService';
 import { showUpdateNotification } from '@/components/UpdateNotification';
 
@@ -22,6 +23,19 @@ export function useUpdateCheck(options: UseUpdateCheckOptions = {}) {
     // Skip if checked recently (unless forced)
     if (!force && updateService.wasCheckedRecently()) {
       return;
+    }
+
+    // Strict Offline Mode blocks the update check too (security/reports/
+    // 03-offline-architecture.md §1 flagged that no setting disabled this at all).
+    try {
+      const strictOffline = await invoke<boolean>('api_get_strict_offline_mode');
+      if (strictOffline) {
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to read Strict Offline Mode setting:', error);
+      // Fail open here to match this app's existing default-permissive behavior —
+      // don't block update checks over a settings-read error.
     }
 
     setIsChecking(true);

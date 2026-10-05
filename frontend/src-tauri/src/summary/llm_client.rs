@@ -222,6 +222,13 @@ pub enum LLMProvider {
     CustomOpenAI,
 }
 
+pub(crate) fn is_azure_endpoint(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.ends_with(".azure.com")))
+        .unwrap_or(false)
+}
+
 impl LLMProvider {
     /// Parse provider from string (case-insensitive)
     pub fn from_str(s: &str) -> Result<Self, String> {
@@ -298,6 +305,34 @@ pub(crate) async fn generate_summary(
         .map_err(|e| e.to_string());
     }
 
+    // Strict Offline Mode (security/reports/03-offline-architecture.md,
+    // security/RESIDUAL_RISKS.md #3): block every cloud provider outright, and require
+    // the Ollama endpoint to actually resolve to a loopback address — not just "contains
+    // the substring localhost", which is what the app validated before this.
+    if crate::network_policy::is_strict_offline() {
+        match provider {
+            LLMProvider::OpenAI
+            | LLMProvider::Claude
+            | LLMProvider::Groq
+            | LLMProvider::OpenRouter
+            | LLMProvider::CustomOpenAI => {
+                return Err(format!(
+                    "Strict Offline Mode is enabled — {:?} requires an internet connection and is blocked. Disable Strict Offline Mode in Settings to use it.",
+                    provider
+                ));
+            }
+            LLMProvider::Ollama => {
+                let host = ollama_endpoint.unwrap_or("http://localhost:11434");
+                crate::ollama::resolve_to_loopback_only(host)
+                    .await
+                    .map_err(|e| format!("Strict Offline Mode: {}", e))?;
+            }
+            LLMProvider::BuiltInAI => {
+                // Unreachable: handled by the early return above.
+            }
+        }
+    }
+
     let (api_url, mut headers) = match provider {
         LLMProvider::OpenAI => (
             "https://api.openai.com/v1/chat/completions".to_string(),
@@ -350,8 +385,20 @@ pub(crate) async fn generate_summary(
         }
     };
 
-    // Add authorization header for non-Claude providers
-    if provider != &LLMProvider::Claude {
+    // Azure (AI Foundry / Azure OpenAI) takes keys in `api-key`; a Bearer header there
+    // is treated as an Entra ID token and rejected.
+    // With org Entra ID sign-in, `api_key` is an access token and goes in Authorization.
+    if provider == &LLMProvider::CustomOpenAI
+        && is_azure_endpoint(&api_url)
+        && crate::policy::managed_entra().is_none()
+    {
+        if !api_key.is_empty() {
+            headers.insert(
+                "api-key",
+                api_key.parse().map_err(|_| "Invalid API key format".to_string())?,
+            );
+        }
+    } else if provider != &LLMProvider::Claude {
         headers.insert(
             header::AUTHORIZATION,
             format!("Bearer {}", api_key)
@@ -517,6 +564,14 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::{cell::Cell, task::Poll};
+
+    #[test]
+    fn azure_endpoint_detection() {
+        assert!(is_azure_endpoint("https://r.services.ai.azure.com/openai/v1/chat/completions"));
+        assert!(is_azure_endpoint("https://r.openai.azure.com/openai/v1"));
+        assert!(!is_azure_endpoint("https://azure.com.evil.example/v1"));
+        assert!(!is_azure_endpoint("http://localhost:8000/v1"));
+    }
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,

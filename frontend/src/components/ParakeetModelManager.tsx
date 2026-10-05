@@ -380,8 +380,8 @@ export function ParakeetModelManager({
     return (
       <div className={`space-y-3 ${className}`}>
         <div className="animate-pulse space-y-3">
-          <div className="h-20 bg-gray-100 rounded-lg"></div>
-          <div className="h-20 bg-gray-100 rounded-lg"></div>
+          <div className="h-20 bg-muted rounded-lg"></div>
+          <div className="h-20 bg-muted rounded-lg"></div>
         </div>
       </div>
     );
@@ -389,9 +389,9 @@ export function ParakeetModelManager({
 
   if (error) {
     return (
-      <div className={`bg-red-50 border border-red-200 rounded-lg p-4 ${className}`}>
-        <p className="text-sm text-red-800">Failed to load models</p>
-        <p className="text-xs text-red-600 mt-1">{error}</p>
+      <div className={`bg-destructive/10 border border-destructive rounded-lg p-4 ${className}`}>
+        <p className="text-sm text-destructive">Failed to load models</p>
+        <p className="text-xs text-destructive mt-1">{error}</p>
       </div>
     );
   }
@@ -453,7 +453,7 @@ export function ParakeetModelManager({
         <motion.div
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-xs text-gray-500 text-center pt-2"
+          className="text-xs text-muted-foreground text-center pt-2"
         >
           Using {getModelDisplayName(selectedModel)} for transcription
         </motion.div>
@@ -512,10 +512,10 @@ function ModelCard({
       className={`
         relative rounded-lg border-2 transition-all cursor-pointer
         ${isSelected && isAvailable
-          ? 'border-blue-500 bg-blue-50'
+          ? 'border-primary bg-primary/10'
           : isAvailable
-            ? 'border-gray-200 hover:border-gray-300 bg-white'
-            : 'border-gray-200 bg-gray-50'
+            ? 'border-border hover:border-border bg-background'
+            : 'border-border bg-muted'
         }
         ${isAvailable ? '' : 'cursor-default'}
       `}
@@ -525,7 +525,7 @@ function ModelCard({
     >
       {/* Recommended Badge */}
       {isRecommended && (
-        <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+        <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-medium">
           Recommended
         </div>
       )}
@@ -536,12 +536,12 @@ function ModelCard({
             {/* Model Name */}
             <div className="flex items-center gap-2 mb-1">
               <span className="text-2xl">{icon}</span>
-              <h3 className="font-semibold text-gray-900">{displayName}</h3>
+              <h3 className="font-semibold text-foreground">{displayName}</h3>
               {isSelected && isAvailable && (
                 <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
+                  className="bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
                 >
                   ✓
                 </motion.span>
@@ -549,15 +549,15 @@ function ModelCard({
             </div>
 
             {/* Tagline */}
-            <p className="text-sm text-gray-600 ml-9">{tagline}</p>
+            <p className="text-sm text-muted-foreground ml-9">{tagline}</p>
           </div>
 
           {/* Status/Action */}
           <div className="ml-4 flex items-center gap-2">
             {isAvailable && !isCancelling && (
               <>
-                <div className="flex items-center gap-1.5 text-green-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="flex items-center gap-1.5 text-success">
+                  <div className="w-2 h-2 bg-success rounded-full"></div>
                   <span className="text-xs font-medium">Ready</span>
                 </div>
                 <AnimatePresence>
@@ -571,7 +571,7 @@ function ModelCard({
                         e.stopPropagation();
                         onDelete();
                       }}
-                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
                       title="Delete model to free up space"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -589,7 +589,7 @@ function ModelCard({
                   e.stopPropagation();
                   onDownload();
                 }}
-                className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
               >
                 Download
               </button>
@@ -601,7 +601,7 @@ function ModelCard({
                   e.stopPropagation();
                   onDownload();
                 }}
-                className="bg-red-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-red-700 transition-colors"
+                className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
               >
                 Retry
               </button>
@@ -614,7 +614,7 @@ function ModelCard({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="bg-orange-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-orange-700 transition-colors"
+                  className="bg-destructive text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
                 >
                   Delete
                 </button>
@@ -623,7 +623,7 @@ function ModelCard({
                     e.stopPropagation();
                     onDownload();
                   }}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                  className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
                 >
                   Re-download
                 </button>
@@ -638,21 +638,21 @@ function ModelCard({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-gray-200"
+            className="mt-3 pt-3 border-t border-border"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-blue-600">
+                <span className="text-sm font-medium text-primary">
                   {isCancelling ? 'Cancelling…' : 'Downloading...'}
                 </span>
                 {!isCancelling && (
-                  <span className="text-sm font-semibold text-blue-600">
+                  <span className="text-sm font-semibold text-primary">
                     {Math.round(displayedProgress)}%
                   </span>
                 )}
               </div>
               {isCancelling ? (
-                <span className="text-xs text-gray-500 font-medium px-2 py-1">
+                <span className="text-xs text-muted-foreground font-medium px-2 py-1">
                   Cancellation requested
                 </span>
               ) : (
@@ -661,22 +661,22 @@ function ModelCard({
                     e.stopPropagation();
                     onCancel();
                   }}
-                  className="text-xs text-gray-600 hover:text-red-600 font-medium transition-colors px-2 py-1 rounded hover:bg-red-50"
+                  className="text-xs text-muted-foreground hover:text-destructive font-medium transition-colors px-2 py-1 rounded hover:bg-destructive/10"
                   title="Cancel download"
                 >
                   Cancel
                 </button>
               )}
             </div>
-            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-accent rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
+                className="h-full bg-primary rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${displayedProgress}%` }}
                 transition={{ duration: 0.3, ease: 'easeOut' }}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {model.size_mb ? (
                 <>
                   {formatFileSize(model.size_mb * displayedProgress / 100)} / {formatFileSize(model.size_mb)}

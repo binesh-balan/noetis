@@ -970,6 +970,11 @@ pub async fn start_import_audio_command<R: Runtime>(
     model: Option<String>,
     provider: Option<String>,
 ) -> Result<ImportStarted, String> {
+    // Org policy pins provider/model/language regardless of what the dialog sent.
+    let (language, model, provider) = match crate::policy::managed_transcription() {
+        Some(t) => (t.language.or(language), Some(t.model), Some(t.provider)),
+        None => (language, model, provider),
+    };
     // Check if import is already in progress (guard will be acquired in start_import)
     if IMPORT_IN_PROGRESS.load(Ordering::SeqCst) {
         return Err("Import already in progress".to_string());

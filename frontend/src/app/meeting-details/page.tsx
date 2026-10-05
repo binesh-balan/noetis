@@ -1,5 +1,6 @@
 "use client"
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
+import { pendingSpeakerIdentification } from '@/lib/speakers';
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { MeetingSummary, SummaryProcessResponse, Transcript } from "@/types";
 import PageContent from "./page-content";
@@ -50,6 +51,12 @@ function MeetingDetailsContent() {
     error: transcriptError,
   } = usePaginatedTranscripts({ meetingId: meetingId || '' });
 
+  // Show speaker labels as soon as automatic identification (started after recording) finishes.
+  useEffect(() => {
+    const pending = meetingId ? pendingSpeakerIdentification(meetingId) : undefined;
+    pending?.then(() => refetch(), () => undefined);
+  }, [meetingId, refetch]);
+
   // Check if gemma3:1b model is available in Ollama
   const checkForGemmaModel = useCallback(async (): Promise<boolean> => {
     try {
@@ -88,6 +95,12 @@ function MeetingDetailsContent() {
       // If DB already has a model, use it (never override!)
       if (currentConfig && currentConfig.model) {
         console.log('Using existing model from DB:', currentConfig.model);
+        // Let automatic speaker identification finish first so the summary sees speaker names.
+        const pending = meetingId ? pendingSpeakerIdentification(meetingId) : undefined;
+        if (pending) {
+          await pending.catch(() => undefined);
+          await refetch();
+        }
         setShouldAutoGenerate(true);
         setHasCheckedAutoGen(true);
         return;
@@ -116,7 +129,7 @@ function MeetingDetailsContent() {
     }
 
     setHasCheckedAutoGen(true);
-  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary]);
+  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary, meetingId, refetch]);
 
   // Sync meeting metadata from pagination hook to meeting details state
   useEffect(() => {
@@ -249,12 +262,12 @@ function MeetingDetailsContent() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
+          <p className="text-destructive mb-4">{error}</p>
           <button
             onClick={() => router.push('/')}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
           >
             Go Back
           </button>
@@ -265,7 +278,7 @@ function MeetingDetailsContent() {
 
   // Show loading spinner while initial data loads
   if (isLoading || !meetingDetails || meetingDetails.id !== meetingId) {
-    return <div className="flex items-center justify-center h-screen">
+    return <div className="flex items-center justify-center h-full">
       <LoaderIcon className="animate-spin size-6 " />
     </div>;
   }
@@ -297,7 +310,7 @@ function MeetingDetailsContent() {
 export default function MeetingDetails() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full">
         <LoaderIcon className="animate-spin size-6" />
       </div>
     }>

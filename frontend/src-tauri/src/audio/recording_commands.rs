@@ -108,7 +108,7 @@ static TRANSCRIPT_LISTENER_ID: Mutex<Option<tauri::EventId>> = Mutex::new(None);
 
 const TRANSCRIPTION_RUNTIME_START_ERROR_CODE: &str =
     "TRANSCRIPTION_RUNTIME_INITIALIZATION_FAILED";
-const TRANSCRIPTION_RUNTIME_USER_MESSAGE: &str = "Speech recognition could not initialize. Restart Meetily. If the problem continues, repair or reinstall the app.";
+const TRANSCRIPTION_RUNTIME_USER_MESSAGE: &str = "Speech recognition could not initialize. Restart Noetis. If the problem continues, repair or reinstall the app.";
 
 // ============================================================================
 // PUBLIC TYPES
@@ -1045,6 +1045,10 @@ pub async fn stop_recording<R: Runtime>(
         info!("ℹ️ No recording manager available for cleanup");
         (None, None)
     };
+
+    // This meeting's context goes into its folder; live answer state is per recording.
+    crate::context::finish_recording(meeting_folder.as_deref());
+    crate::live_answers::reset(&app);
 
     // Set recording flag to false
     info!("🔍 Setting IS_RECORDING to false");

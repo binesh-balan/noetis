@@ -4,7 +4,9 @@ import { Transcript, TranscriptSegmentData } from '@/types';
 import { TranscriptView } from '@/components/TranscriptView';
 import { VirtualizedTranscriptView } from '@/components/VirtualizedTranscriptView';
 import { TranscriptButtonGroup } from './TranscriptButtonGroup';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { toast } from 'sonner';
 
 interface TranscriptPanelProps {
   transcripts: Transcript[];
@@ -59,23 +61,37 @@ export function TranscriptPanel({
       id: t.id,
       timestamp: t.audio_start_time ?? 0,
       endTime: t.audio_end_time,
+      speaker: t.speaker,
       text: t.text,
       confidence: t.confidence,
     }));
   }, [transcripts, usePagination, segments]);
 
+  const handleRenameSpeaker = useCallback(async (from: string, to: string) => {
+    if (!meetingId) return;
+    try {
+      await invoke('api_rename_speaker', { meetingId, from, to });
+      await onRefetchTranscripts?.();
+    } catch (e) {
+      toast.error(String(e));
+    }
+  }, [meetingId, onRefetchTranscripts]);
+
   return (
-    <div className="flex h-full min-w-0 w-full bg-white flex-col relative @container">
+    <div className="flex h-full min-w-0 w-full bg-background flex-col relative @container">
       {/* Title area */}
-      <div className="p-4 border-b border-gray-200">
-        <TranscriptButtonGroup
-          transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
-          onCopyTranscript={onCopyTranscript}
-          onOpenMeetingFolder={onOpenMeetingFolder}
-          meetingId={meetingId}
-          meetingFolderPath={meetingFolderPath}
-          onRefetchTranscripts={onRefetchTranscripts}
-        />
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Transcript</h2>
+        <div className="ml-auto min-w-0">
+          <TranscriptButtonGroup
+            transcriptCount={usePagination ? (totalCount ?? convertedSegments.length) : (transcripts?.length || 0)}
+            onCopyTranscript={onCopyTranscript}
+            onOpenMeetingFolder={onOpenMeetingFolder}
+            meetingId={meetingId}
+            meetingFolderPath={meetingFolderPath}
+            onRefetchTranscripts={onRefetchTranscripts}
+          />
+        </div>
       </div>
 
       {/* Transcript content - use virtualized view for better performance */}
@@ -89,6 +105,7 @@ export function TranscriptPanel({
           enableStreaming={false}
           showConfidence={true}
           disableAutoScroll={disableAutoScroll}
+          onRenameSpeaker={meetingId ? handleRenameSpeaker : undefined}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
           totalCount={totalCount}
@@ -99,10 +116,10 @@ export function TranscriptPanel({
 
       {/* Custom prompt input at bottom of transcript section */}
       {!isRecording && convertedSegments.length > 0 && (
-        <div className="p-1 border-t border-gray-200">
+        <div className="p-4 border-t border-border">
           <textarea
             placeholder="Add context for AI summary. For example people involved, meeting overview, objective etc..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm min-h-[80px] resize-y"
+            className="w-full px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-background shadow-sm min-h-[80px] resize-y"
             value={customPrompt}
             onChange={(e) => onPromptChange(e.target.value)}
           />

@@ -1,42 +1,57 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, File, Settings, ChevronLeftCircle, ChevronRightCircle, Calendar, StickyNote, Home, Trash2, Mic, Square, Plus, Search, Pencil, NotebookPen, SearchIcon, X, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { FileText, Info, Mic, NotebookPen, PanelLeft, Pencil, Search, Settings, Trash2, Upload, X } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarProvider';
 import type { CurrentMeeting } from '@/components/Sidebar/SidebarProvider';
 import { ConfirmationModal } from '../ConfirmationModel/confirmation-modal';
-import { ModelConfig } from '@/components/ModelSettingsModal';
-import { SettingTabs } from '../SettingTabs';
-import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
+import { cn } from '@/lib/utils';
+import { formatDuration } from '@/lib/formatDuration';
+import { meetingHref } from '@/lib/meetingHref';
+import { useModKeyLabel } from '@/hooks/usePlatform';
+import { useLiveSeconds } from '@/hooks/useLiveSeconds';
+import { Input } from '@/components/ui/input';
+import { About } from '../About';
 
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { VisuallyHidden } from "@/components/ui/visually-hidden"
 
-import { MessageToast } from '../MessageToast';
-import Logo from '../Logo';
-import Info from '../Info';
-import { ComplianceNotification } from '../ComplianceNotification';
-import { Input } from '../ui/input';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group';
-
-interface SidebarItem {
-  id: string;
-  title: string;
-  type: 'folder' | 'file';
-  children?: SidebarItem[];
+// Collapsed-strip icon button with a right-side tooltip.
+function RailButton({ label, onClick, active, children }: {
+  label: string; onClick: () => void; active?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={onClick}
+          aria-label={label}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
+            active && 'bg-muted text-foreground'
+          )}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right"><p>{label}</p></TooltipContent>
+    </Tooltip>
+  );
 }
 
 const Sidebar: React.FC = () => {
@@ -45,7 +60,6 @@ const Sidebar: React.FC = () => {
   const {
     currentMeeting,
     setCurrentMeeting,
-    sidebarItems,
     isCollapsed,
     toggleCollapse,
     handleRecordingToggle,
@@ -54,28 +68,15 @@ const Sidebar: React.FC = () => {
     isSearching,
     meetings,
     setMeetings,
-    serverAddress
   } = useSidebar();
 
   // Get recording state from RecordingStateContext (single source of truth)
-  const { isRecording } = useRecordingState();
+  const { isRecording, isPaused, activeDuration } = useRecordingState();
+  const modKey = useModKeyLabel();
+  const liveSeconds = useLiveSeconds(activeDuration, isRecording && !isPaused);
   const { openImportDialog } = useImportDialog();
   const { betaFeatures } = useConfig();
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['meetings']));
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showModelSettings, setShowModelSettings] = useState(false);
-  const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: '',
-    whisperModel: '',
-    apiKey: null,
-    ollamaEndpoint: null
-  });
-  const [transcriptModelConfig, setTranscriptModelConfig] = useState<TranscriptModelProps>({
-    provider: 'parakeet',
-    model: 'parakeet-tdt-0.6b-v3-int8',
-  });
-  const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
 
   // State for edit modal
   const [editModalState, setEditModalState] = useState<{ isOpen: boolean; meetingId: string | null; currentTitle: string }>({
@@ -85,157 +86,7 @@ const Sidebar: React.FC = () => {
   });
   const [editingTitle, setEditingTitle] = useState<string>('');
 
-  // Ensure 'meetings' folder is always expanded
-  useEffect(() => {
-    if (!expandedFolders.has('meetings')) {
-      const newExpanded = new Set(expandedFolders);
-      newExpanded.add('meetings');
-      setExpandedFolders(newExpanded);
-    }
-  }, [expandedFolders]);
-
-  // useEffect(() => {
-  //   if (settingsSaveSuccess !== null) {
-  //     const timer = setTimeout(() => {
-  //       setSettingsSaveSuccess(null);
-  //     }, 3000);
-  //   }
-  // }, [settingsSaveSuccess]);
-
-
   const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; itemId: string | null }>({ isOpen: false, itemId: null });
-
-  useEffect(() => {
-    // Note: Don't set hardcoded defaults - let DB be the source of truth
-    const fetchModelConfig = async () => {
-      // Only make API call if serverAddress is loaded
-      if (!serverAddress) {
-        console.log('Waiting for server address to load before fetching model config');
-        return;
-      }
-
-      try {
-        const data = await invoke('api_get_model_config') as any;
-        if (data && data.provider !== null) {
-          // Fetch API key if not included and provider requires it
-          if (data.provider !== 'ollama' && !data.apiKey) {
-            try {
-              const apiKeyData = await invoke('api_get_api_key', {
-                provider: data.provider
-              }) as string;
-              data.apiKey = apiKeyData;
-            } catch (err) {
-              console.error('Failed to fetch API key:', err);
-            }
-          }
-          setModelConfig(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch model config:', error);
-      }
-    };
-
-    fetchModelConfig();
-  }, [serverAddress]);
-
-
-  useEffect(() => {
-    // Note: Don't set hardcoded defaults - let DB be the source of truth
-    const fetchTranscriptSettings = async () => {
-      // Only make API call if serverAddress is loaded
-      if (!serverAddress) {
-        console.log('Waiting for server address to load before fetching transcript settings');
-        return;
-      }
-
-      try {
-        const data = await invoke('api_get_transcript_config') as any;
-        if (data && data.provider !== null) {
-          setTranscriptModelConfig(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch transcript settings:', error);
-      }
-    };
-    fetchTranscriptSettings();
-  }, [serverAddress]);
-
-  // Listen for model config updates from other components
-  useEffect(() => {
-    const setupListener = async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      const unlisten = await listen<ModelConfig>('model-config-updated', (event) => {
-        console.log('Sidebar received model-config-updated event:', event.payload);
-        setModelConfig(event.payload);
-      });
-
-      return unlisten;
-    };
-
-    let cleanup: (() => void) | undefined;
-    setupListener().then(fn => cleanup = fn);
-
-    return () => {
-      cleanup?.();
-    };
-  }, []);
-
-
-
-  // Handle model config save
-  const handleSaveModelConfig = async (config: ModelConfig) => {
-    try {
-      await invoke('api_save_model_config', {
-        provider: config.provider,
-        model: config.model,
-        whisperModel: config.whisperModel,
-        apiKey: config.apiKey,
-        ollamaEndpoint: config.ollamaEndpoint,
-      });
-
-      setModelConfig(config);
-      console.log('Model config saved successfully');
-      setSettingsSaveSuccess(true);
-
-      // Emit event to sync other components
-      const { emit } = await import('@tauri-apps/api/event');
-      await emit('model-config-updated', config);
-
-      // Track settings change
-      await Analytics.trackSettingsChanged('model_config', `${config.provider}_${config.model}`);
-    } catch (error) {
-      console.error('Error saving model config:', error);
-      setSettingsSaveSuccess(false);
-    }
-  };
-
-  const handleSaveTranscriptConfig = async (updatedConfig?: TranscriptModelProps) => {
-    try {
-      const configToSave = updatedConfig || transcriptModelConfig;
-      const payload = {
-        provider: configToSave.provider,
-        model: configToSave.model,
-        apiKey: configToSave.apiKey ?? null
-      };
-      console.log('Saving transcript config with payload:', payload);
-
-      await invoke('api_save_transcript_config', {
-        provider: payload.provider,
-        model: payload.model,
-        apiKey: payload.apiKey,
-      });
-
-
-      setSettingsSaveSuccess(true);
-
-      // Track settings change
-      const transcriptConfigToSave = updatedConfig || transcriptModelConfig;
-      await Analytics.trackSettingsChanged('transcript_config', `${transcriptConfigToSave.provider}_${transcriptConfigToSave.model}`);
-    } catch (error) {
-      console.error('Failed to save transcript config:', error);
-      setSettingsSaveSuccess(false);
-    }
-  };
 
   // Handle search input changes
   const handleSearchChange = useCallback(async (value: string) => {
@@ -246,86 +97,20 @@ const Sidebar: React.FC = () => {
 
     // Search through transcripts
     await searchTranscripts(value);
+  }, [searchTranscripts]);
 
-    // Make sure the meetings folder is expanded when searching
-    if (!expandedFolders.has('meetings')) {
-      const newExpanded = new Set(expandedFolders);
-      newExpanded.add('meetings');
-      setExpandedFolders(newExpanded);
-    }
-  }, [expandedFolders, searchTranscripts]);
-
-  // Combine search results with sidebar items
-  const filteredSidebarItems = useMemo(() => {
-    if (!searchQuery.trim()) return sidebarItems;
-
-    // If we have search results, highlight matching meetings
-    if (searchResults.length > 0) {
-      // Get the IDs of meetings that matched in transcripts
-      const matchedMeetingIds = new Set(searchResults.map(result => result.id));
-
-      return sidebarItems
-        .map(folder => {
-          // Always include folders in the results
-          if (folder.type === 'folder') {
-            if (!folder.children) return folder;
-
-            // Filter children based on search results or title match
-            const filteredChildren = folder.children.filter(item => {
-              // Include if the meeting ID is in our search results
-              if (matchedMeetingIds.has(item.id)) return true;
-
-              // Or if the title matches the search query
-              return item.title.toLowerCase().includes(searchQuery.toLowerCase());
-            });
-
-            return {
-              ...folder,
-              children: filteredChildren
-            };
-          }
-
-          // For non-folder items, check if they match the search
-          return (matchedMeetingIds.has(folder.id) ||
-            folder.title.toLowerCase().includes(searchQuery.toLowerCase()))
-            ? folder : undefined;
-        })
-        .filter((item): item is SidebarItem => item !== undefined); // Type-safe filter
-    } else {
-      // Fall back to title-only filtering if no transcript results
-      return sidebarItems
-        .map(folder => {
-          // Always include folders in the results
-          if (folder.type === 'folder') {
-            if (!folder.children) return folder;
-
-            // Filter children based on search query
-            const filteredChildren = folder.children.filter(item =>
-              item.title.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-
-            return {
-              ...folder,
-              children: filteredChildren
-            };
-          }
-
-          // For non-folder items, check if they match the search
-          return folder.title.toLowerCase().includes(searchQuery.toLowerCase()) ? folder : undefined;
-        })
-        .filter((item): item is SidebarItem => item !== undefined); // Type-safe filter
-    }
-  }, [sidebarItems, searchQuery, searchResults, expandedFolders]);
-
+  // Meetings matching the transcript search results or the title
+  const filteredMeetings = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return meetings;
+    const matchedMeetingIds = new Set(searchResults.map(result => result.id));
+    return meetings.filter(m => matchedMeetingIds.has(m.id) || m.title.toLowerCase().includes(q));
+  }, [meetings, searchQuery, searchResults]);
 
   const handleDelete = async (itemId: string) => {
     console.log('Deleting item:', itemId);
-    const payload = {
-      meetingId: itemId
-    };
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       await invoke('api_delete_meeting', {
         meetingId: itemId,
       });
@@ -421,128 +206,20 @@ const Sidebar: React.FC = () => {
     setEditingTitle('');
   };
 
-  const toggleFolder = (folderId: string) => {
-    // Normal toggle behavior for all folders
-    const newExpanded = new Set(expandedFolders);
-    if (newExpanded.has(folderId)) {
-      newExpanded.delete(folderId);
-    } else {
-      newExpanded.add(folderId);
-    }
-    setExpandedFolders(newExpanded);
-  };
-
-  // Expose setShowModelSettings to window for Rust tray to call
+  // Exposed on window for the Rust tray. It used to open a model-settings state that
+  // no longer rendered anything; it now opens the Settings page.
   useEffect(() => {
-    (window as any).openSettings = () => {
-      setShowModelSettings(true);
-    };
+    (window as any).openSettings = () => router.push('/settings');
 
     // Cleanup on unmount
     return () => {
       delete (window as any).openSettings;
     };
-  }, []);
+  }, [router]);
 
-  const renderCollapsedIcons = () => {
-    if (!isCollapsed) return null;
-
-    const isHomePage = pathname === '/';
-    const isMeetingPage = pathname?.includes('/meeting-details');
-    const isSettingsPage = pathname === '/settings';
-
-    return (
-      <TooltipProvider>
-        <div className="flex flex-col items-center space-y-4 mt-4">
-          <Logo isCollapsed={isCollapsed} />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => router.push('/')}
-                className={`p-2 rounded-lg transition-colors duration-150 ${isHomePage ? 'bg-gray-100' : 'hover:bg-gray-100'
-                  }`}
-              >
-                <Home className="w-5 h-5 text-gray-600" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Home</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={handleRecordingToggle}
-                disabled={isRecording}
-                className={`p-2 ${isRecording ? 'bg-red-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-full transition-colors duration-150 shadow-sm`}
-              >
-                {isRecording ? (
-                  <Square className="w-5 h-5 text-white" />
-                ) : (
-                  <Mic className="w-5 h-5 text-white" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>{isRecording ? "Recording in progress..." : "Start Recording"}</p>
-            </TooltipContent>
-          </Tooltip>
-
-          {betaFeatures.importAndRetranscribe && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => openImportDialog()}
-                  className="p-2 rounded-lg transition-colors duration-150 hover:bg-blue-100 bg-blue-50"
-                >
-                  <Upload className="w-5 h-5 text-blue-600" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Import Audio</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => {
-                  if (isCollapsed) toggleCollapse();
-                  toggleFolder('meetings');
-                }}
-                className={`p-2 rounded-lg transition-colors duration-150 ${isMeetingPage ? 'bg-gray-100' : 'hover:bg-gray-100'
-                  }`}
-              >
-                <NotebookPen className="w-5 h-5 text-gray-600" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Meeting Notes</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => router.push('/settings')}
-                className={`p-2 rounded-lg transition-colors duration-150 ${isSettingsPage ? 'bg-gray-100' : 'hover:bg-gray-100'
-                  }`}
-              >
-                <Settings className="w-5 h-5 text-gray-600" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>Settings</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Info isCollapsed={isCollapsed} />
-        </div>
-      </TooltipProvider>
-    );
+  const openMeeting = (item: CurrentMeeting) => {
+    setCurrentMeeting({ id: item.id, title: item.title });
+    router.push(meetingHref(item.id));
   };
 
   // Find matching transcript snippet for a meeting item
@@ -551,271 +228,216 @@ const Sidebar: React.FC = () => {
     return searchResults.find(result => result.id === itemId);
   };
 
-  const renderItem = (item: SidebarItem, depth = 0) => {
-    const isExpanded = expandedFolders.has(item.id);
-    const paddingLeft = `${depth * 12 + 12}px`;
-    const isActive = item.type === 'file' && currentMeeting?.id === item.id;
+  const isSettingsPage = pathname === '/settings';
+  const recordingLabel = isPaused ? 'Paused' : 'Recording';
+  const recordingDot = (
+    <span className={cn('h-2 w-2 shrink-0 rounded-full bg-recording', !isPaused && 'animate-pulse')} />
+  );
+
+  const renderMeeting = (item: CurrentMeeting) => {
+    const isActive = currentMeeting?.id === item.id;
     const isMeetingItem = item.id.includes('-') && !item.id.startsWith('intro-call');
-
-    // Check if this item has a matching transcript snippet
     const matchingResult = isMeetingItem ? findMatchingSnippet(item.id) : null;
-    const hasTranscriptMatch = !!matchingResult;
-
-    if (isCollapsed) return null;
 
     return (
       <div key={item.id}>
         <div
-          className={`flex items-center transition-all duration-150 group ${item.type === 'folder' && depth === 0
-            ? 'p-3 text-lg font-semibold h-10 mx-3 mt-3 rounded-lg'
-            : `px-3 py-2 my-0.5 rounded-md text-sm ${isActive ? 'bg-blue-100 text-blue-700 font-medium' :
-              hasTranscriptMatch ? 'bg-yellow-50' : 'hover:bg-gray-50'
-            } cursor-pointer`
-            }`}
-          style={item.type === 'folder' && depth === 0 ? {} : { paddingLeft }}
-          onClick={() => {
-            if (item.type === 'folder') {
-              toggleFolder(item.id);
-            } else {
-              setCurrentMeeting({ id: item.id, title: item.title });
-              const basePath = item.id.startsWith('intro-call') ? '/' :
-                item.id.includes('-') ? `/meeting-details?id=${item.id}` : `/notes/${item.id}`;
-              router.push(basePath);
-            }
-          }}
+          className={cn(
+            'group flex items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
+            isActive && 'bg-muted text-foreground'
+          )}
         >
-          {item.type === 'folder' ? (
-            <>
-              {item.id === 'meetings' ? (
-                <Calendar className="w-4 h-4 mr-2" />
-              ) : item.id === 'notes' ? (
-                <Calendar className="w-4 h-4 mr-2" />
-              ) : null}
-              <span className={depth === 0 ? "" : "font-medium"}>{item.title}</span>
-              <div className="ml-auto">
-                {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
-                )}
-              </div>
-              {searchQuery && item.id === 'meetings' && isSearching && (
-                <span className="ml-2 text-xs text-blue-500 animate-pulse">Searching...</span>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col w-full">
-              <div className="flex items-center w-full">
-                {isMeetingItem ? (
-                  <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-gray-100">
-                    <File className="w-3.5 h-3.5 text-gray-600" />
-                  </div>
-                ) : (
-                  <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full mr-2 bg-blue-100">
-                    <Plus className="w-3.5 h-3.5 text-blue-600" />
-                  </div>
-                )}
-                <span className="flex-1 break-words">{item.title}</span>
-                {isMeetingItem && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditStart(item.id, item.title);
-                      }}
-                      className="hover:text-blue-600 p-1 rounded-md hover:bg-blue-50 flex-shrink-0"
-                      aria-label="Edit meeting title"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteModalState({ isOpen: true, itemId: item.id });
-                      }}
-                      className="hover:text-red-600 p-1 rounded-md hover:bg-red-50 flex-shrink-0"
-                      aria-label="Delete meeting"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Show transcript match snippet if available */}
-              {hasTranscriptMatch && (
-                <div className="mt-1 ml-8 text-xs text-gray-500 bg-yellow-50 p-1.5 rounded border border-yellow-100 line-clamp-2">
-                  <span className="font-medium text-yellow-600">Match:</span> {matchingResult.matchContext}
-                </div>
-              )}
+          <button
+            onClick={() => openMeeting(item)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{item.title}</span>
+          </button>
+          {isMeetingItem && (
+            <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <button
+                onClick={() => handleEditStart(item.id, item.title)}
+                className="rounded p-1 hover:text-foreground"
+                aria-label="Edit meeting title"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setDeleteModalState({ isOpen: true, itemId: item.id })}
+                className="rounded p-1 hover:text-destructive"
+                aria-label="Delete meeting"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
         </div>
-        {item.type === 'folder' && isExpanded && item.children && (
-          <div className="ml-1">
-            {item.children.map(child => renderItem(child, depth + 1))}
+
+        {/* Show transcript match snippet if available */}
+        {matchingResult && (
+          <div className="mx-2 mb-1 line-clamp-2 border-l-2 border-border pl-2 text-xs text-muted-foreground">
+            {matchingResult.matchContext}
           </div>
         )}
       </div>
     );
   };
 
+  const collapseButton = (
+    <button
+      onClick={toggleCollapse}
+      aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      <PanelLeft className="h-4 w-4" />
+    </button>
+  );
+
   return (
-    <div className="fixed top-0 left-0 h-screen z-40">
-      {/* Floating collapse button */}
-      <button
-        onClick={toggleCollapse}
-        className="absolute -right-6 top-20 z-50 p-1 bg-white hover:bg-gray-100 rounded-full shadow-lg border"
-        style={{ transform: 'translateX(50%)' }}
-      >
-        {isCollapsed ? (
-          <ChevronRightCircle className="w-6 h-6" />
-        ) : (
-          <ChevronLeftCircle className="w-6 h-6" />
-        )}
-      </button>
-
-      <div
-        className={`h-screen bg-white border-r shadow-sm flex flex-col transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-64'
-          }`}
-      >
-        {/*  Header with traffic light spacing */}
-        <div className="flex-shrink-0 h-22 flex items-center">
-
-          {/* Title container */}
-
-
-
-          <div className="flex-1">
-            {!isCollapsed && (
-              <div className="p-3">
-                {/* <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
-                  <span>Meetily</span>
-                </span> */}
-                <Logo isCollapsed={isCollapsed} />
-
-                <div className="relative mb-1">
-                  <InputGroup >
-                    <InputGroupInput placeholder='Search meeting content...' value={searchQuery}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                    />
-                    <InputGroupAddon>
-                      <SearchIcon />
-                    </InputGroupAddon>
-                    {searchQuery &&
-                      <InputGroupAddon align={'inline-end'}>
-                        <InputGroupButton
-                          onClick={() => handleSearchChange('')}
-                        >
-                          <X />
-                        </InputGroupButton>
-                      </InputGroupAddon>
-                    }
-                  </InputGroup>
-                </div>
-              </div>
+    <aside className={cn('flex h-full shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200', isCollapsed ? 'w-12' : 'w-60')}>
+      {isCollapsed ? (
+        <div className="flex flex-1 flex-col items-center gap-1 py-2">
+          {collapseButton}
+          <div className="mt-2 flex flex-col items-center gap-1">
+            {isRecording ? (
+              <RailButton label={`${recordingLabel} ${formatDuration(liveSeconds)}`} onClick={() => router.push('/')}>
+                {recordingDot}
+              </RailButton>
+            ) : (
+              <RailButton label="New recording" onClick={handleRecordingToggle}>
+                <Mic className="h-4 w-4 text-recording" />
+              </RailButton>
             )}
+            {betaFeatures.importAndRetranscribe && (
+              <RailButton label="Import audio" onClick={() => openImportDialog()}>
+                <Upload className="h-4 w-4" />
+              </RailButton>
+            )}
+            <RailButton label="Search" onClick={toggleCollapse}>
+              <Search className="h-4 w-4" />
+            </RailButton>
+            <RailButton label="Meeting notes" onClick={toggleCollapse} active={pathname?.includes('/meeting-details')}>
+              <NotebookPen className="h-4 w-4" />
+            </RailButton>
+          </div>
+          <div className="mt-auto">
+            <RailButton label="Settings" onClick={() => router.push('/settings')} active={isSettingsPage}>
+              <Settings className="h-4 w-4" />
+            </RailButton>
           </div>
         </div>
-
-        {/* Main content - scrollable area */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Fixed navigation items */}
-          <div className="flex-shrink-0">
-            {!isCollapsed && (
-              <div
-                onClick={() => router.push('/')}
-                className="p-3  text-lg font-semibold items-center hover:bg-gray-100 h-10   flex mx-3 mt-3 rounded-lg cursor-pointer"
-              >
-                <Home className="w-4 h-4 mr-2" />
-                <span>Home</span>
-              </div>
-            )}
-          </div>
-
-          {/* Content area */}
-          <div className="flex-1 flex flex-col min-h-0">
-            {renderCollapsedIcons()}
-            {/* Meeting Notes folder header - fixed */}
-            {!isCollapsed && (
-              <div className="flex-shrink-0">
-                {filteredSidebarItems.filter(item => item.type === 'folder').map(item => (
-                  <div key={item.id}>
-                    <div
-                      className="flex items-center transition-all duration-150 p-3 text-lg font-semibold h-10 mx-3 mt-3 rounded-lg"
-                    >
-                      <NotebookPen className="w-4 h-4 mr-2 text-gray-600" />
-                      <span className="text-gray-700">{item.title}</span>
-                      {searchQuery && item.id === 'meetings' && isSearching && (
-                        <span className="ml-2 text-xs text-blue-500 animate-pulse">Searching...</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Scrollable meeting items */}
-            {!isCollapsed && (
-              <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-                {filteredSidebarItems
-                  .filter(item => item.type === 'folder' && expandedFolders.has(item.id) && item.children)
-                  .map(item => (
-                    <div key={`${item.id}-children`} className="mx-3">
-                      {item.children!.map(child => renderItem(child, 1))}
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        {!isCollapsed && (
-
-          <div className="flex-shrink-0 p-2 border-t border-gray-100">
-            <button
-              onClick={handleRecordingToggle}
-              disabled={isRecording}
-              className={`w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white ${isRecording ? 'bg-red-300 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'} rounded-lg transition-colors shadow-sm`}
-            >
-              {isRecording ? (
-                <>
-                  <Square className="w-4 h-4 mr-2" />
-                  <span>Recording in progress...</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-4 h-4 mr-2" />
-                  <span>Start Recording</span>
-                </>
-              )}
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+            <button onClick={() => router.push('/')} className="text-sm font-semibold hover:text-foreground/80">
+              Noetis
             </button>
+            <kbd className="rounded border border-border px-1 text-[10px] text-muted-foreground">{modKey}K</kbd>
+            <div className="ml-auto">{collapseButton}</div>
+          </div>
 
+          {/* Primary actions */}
+          <div className="shrink-0 space-y-0.5 px-2">
+            {isRecording ? (
+              <Link
+                href="/"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-muted"
+              >
+                {recordingDot}
+                <span>{recordingLabel}</span>
+                {pathname !== '/' && (
+                  // On home the RecordingBar already shows the timer.
+                  <span className="ml-auto tabular-nums text-muted-foreground">{formatDuration(liveSeconds)}</span>
+                )}
+              </Link>
+            ) : (
+              <button
+                onClick={handleRecordingToggle}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-muted"
+              >
+                <Mic className="h-4 w-4 text-recording" />
+                <span>New recording</span>
+              </button>
+            )}
             {betaFeatures.importAndRetranscribe && (
               <button
                 onClick={() => openImportDialog()}
-                className="w-full flex items-center justify-center px-3 py-2 mt-1 text-sm font-medium text-gray-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors shadow-sm"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Upload className="w-4 h-4 mr-2" />
-                <span>Import Audio</span>
+                <Upload className="h-4 w-4" />
+                <span>Import audio</span>
               </button>
             )}
+          </div>
 
+          {/* Transcript search */}
+          <div className="relative shrink-0 px-2 pt-3">
+            <Search className="pointer-events-none absolute left-4 top-1/2 mt-1.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search meeting content..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="h-8 border-input bg-background pl-7 pr-7 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => handleSearchChange('')}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 mt-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Meetings. ponytail: meetings carry no date field, so one ungrouped list;
+              group by Today/Yesterday/This week/Earlier once api_get_meetings returns a timestamp. */}
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            <div className="flex items-center gap-1.5 px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <NotebookPen className="h-3 w-3" />
+              <span>Meetings</span>
+              {searchQuery && isSearching && (
+                <span className="ml-auto animate-pulse normal-case tracking-normal">Searching...</span>
+              )}
+            </div>
+            {filteredMeetings.map(renderMeeting)}
+          </div>
+
+          {/* Footer */}
+          <div className="flex shrink-0 items-center gap-1 border-t border-border p-2">
             <button
               onClick={() => router.push('/settings')}
-              className="w-full flex items-center justify-center px-3 py-1.5 mt-1 mb-1 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors shadow-sm"
+              className={cn(
+                'flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
+                isSettingsPage && 'bg-muted text-foreground'
+              )}
             >
-              <Settings className="w-4 h-4 mr-2" />
+              <Settings className="h-4 w-4" />
               <span>Settings</span>
+              <kbd className="ml-auto rounded border border-border px-1 text-[10px] text-muted-foreground">{modKey},</kbd>
             </button>
-            <Info isCollapsed={isCollapsed} />
-            <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
-              v0.4.1
-            </div>
+            <Dialog aria-describedby={undefined}>
+              <DialogTrigger asChild>
+                <button
+                  aria-label="About Noetis"
+                  title="About Noetis"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <VisuallyHidden>
+                  <DialogTitle>About Noetis</DialogTitle>
+                </VisuallyHidden>
+                <About />
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Confirmation Modal for Delete */}
       <ConfirmationModal
@@ -837,7 +459,7 @@ const Sidebar: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">Edit Meeting Title</h3>
             <div className="space-y-4">
               <div>
-                <label htmlFor="meeting-title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="meeting-title" className="block text-sm font-medium text-foreground mb-2">
                   Meeting Title
                 </label>
                 <input
@@ -852,7 +474,7 @@ const Sidebar: React.FC = () => {
                       handleEditCancel();
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="Enter meeting title"
                   autoFocus
                 />
@@ -862,20 +484,20 @@ const Sidebar: React.FC = () => {
           <DialogFooter>
             <button
               onClick={handleEditCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-accent rounded-md transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleEditConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
             >
               Save
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </aside>
   );
 };
 

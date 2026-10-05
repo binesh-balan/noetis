@@ -39,20 +39,31 @@ pub mod analytics;
 pub mod api;
 pub mod audio;
 pub mod config;
+pub mod context;
 pub mod console_utils;
 pub mod database;
+pub mod diarization;
+pub mod entra;
+pub mod meeting_detector;
+pub mod nemotron;
+pub mod network_policy;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
 pub mod openai;
 pub mod anthropic;
 pub mod groq;
+pub mod live_answers;
 pub mod openrouter;
 pub mod parakeet_engine;
+pub mod policy;
+pub mod secure_storage;
+pub mod speaker_hints;
 pub mod state;
 pub mod summary;
 pub mod tray;
 pub mod utils;
+pub mod voices;
 pub mod whisper_engine;
 
 use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
@@ -441,6 +452,10 @@ async fn set_language_preference(language: String) -> Result<(), String> {
 
 // Internal helper function to get language preference (for use within Rust code)
 pub fn get_language_preference_internal() -> Option<String> {
+    // An org-pinned language wins over whatever the UI pushed.
+    if let Some(lang) = policy::managed_transcription().and_then(|t| t.language) {
+        return Some(lang);
+    }
     LANGUAGE_PREFERENCE.lock().ok().map(|lang| lang.clone())
 }
 
@@ -468,6 +483,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        live_answers::on_hotkey(app.clone());
+                    }
+                })
+                .build(),
+        )
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
@@ -509,6 +533,10 @@ pub fn run() {
             // Initialize system tray
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);
+            }
+            meeting_detector::spawn(_app.handle().clone());
+            if let Err(e) = live_answers::register_hotkey(_app.handle(), &live_answers::load_settings(_app.handle())) {
+                log::warn!("Live answers hotkey not registered: {e}");
             }
 
             // Initialize notification system with proper defaults
@@ -584,6 +612,19 @@ pub fn run() {
                 database::setup::initialize_database_on_startup(&_app.handle()).await
             })
             .expect("Failed to initialize database");
+
+            // Load the persisted Strict Offline Mode flag into the in-memory copy that
+            // generate_summary/the update checker actually read (network_policy) — must
+            // run after the database is initialized (just above), since it reads the
+            // settings table.
+            if let Some(app_state) = _app.handle().try_state::<state::AppState>() {
+                let pool = app_state.db_manager.pool().clone();
+                tauri::async_runtime::block_on(async move {
+                    network_policy::sync_from_db(&pool).await;
+                });
+            } else {
+                log::warn!("AppState not available to load Strict Offline Mode setting; defaulting to off");
+            }
 
             // Initialize bundled templates directory for dynamic template discovery
             log::info!("Initializing bundled templates directory...");
@@ -735,10 +776,19 @@ pub fn run() {
             api::test_backend_connection,
             api::debug_backend_connection,
             api::open_external_url,
+            api::export_text_content,
+            api::export_binary_content,
+            api::api_get_strict_offline_mode,
+            api::api_set_strict_offline_mode,
+            api::api_forget_all_api_keys,
             // Custom OpenAI commands
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
+            policy::api_get_managed_policy,
+            entra::api_entra_status,
+            entra::api_entra_sign_in,
+            entra::api_entra_sign_out,
             // Summary commands
             summary::commands::api_process_transcript,
             summary::commands::api_get_summary,
@@ -753,6 +803,9 @@ pub fn run() {
             summary::template_commands::api_list_templates,
             summary::template_commands::api_get_template_details,
             summary::template_commands::api_validate_template,
+            summary::template_commands::api_get_template,
+            summary::template_commands::api_save_custom_template,
+            summary::template_commands::api_delete_custom_template,
             // Built-in AI commands
             summary::summary_engine::commands::builtin_ai_list_models,
             summary::summary_engine::commands::builtin_ai_get_model_info,
@@ -822,6 +875,27 @@ pub fn run() {
             utils::open_system_settings,
             // Retranscription commands
             audio::retranscription::start_retranscription_command,
+            diarization::start_speaker_identification,
+            diarization::api_rename_speaker,
+            voices::api_list_voices,
+            voices::api_rename_voice,
+            voices::api_forget_voice,
+            meeting_detector::meeting_prompt_info,
+            context::get_profile,
+            context::set_profile,
+            context::get_live_meeting_context,
+            context::set_live_meeting_context,
+            context::get_meeting_context,
+            context::save_meeting_context,
+            live_answers::live_answers_get_settings,
+            live_answers::live_answers_set_settings,
+            live_answers::answer_card_state,
+            live_answers::answer_card_dismiss,
+            live_answers::live_answer_history,
+            meeting_detector::meeting_prompt_respond,
+            meeting_detector::reveal_main_window,
+            meeting_detector::detector_start_pending,
+            meeting_detector::disown_detector_start,
             audio::retranscription::cancel_retranscription_command,
             audio::retranscription::is_retranscription_in_progress_command,
             // Import audio commands

@@ -142,6 +142,15 @@ pub struct ModelDef {
     /// Download URL (HuggingFace or other source)
     pub download_url: String,
 
+    /// Pinned SHA-256 (lowercase hex) for the file at `download_url`, when known. Fetched
+    /// from HuggingFace's own git-lfs pointer metadata (not self-computed) — closes the
+    /// "size-heuristic + magic-number only, no cryptographic hash" gap in
+    /// security/reports/07-ai-security.md §4. `#[serde(default)]` so this struct still
+    /// deserializes cleanly from any older cached/stored representation that predates
+    /// this field.
+    #[serde(default)]
+    pub sha256: Option<String>,
+
     /// File size in MiB. The field name is kept for API compatibility.
     pub size_mb: u64,
 
@@ -170,6 +179,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             gguf_file: "Qwen3.5-2B-Q4_K_M.gguf".to_string(),
             template: "qwen3.5_nonthinking".to_string(),
             download_url: "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf".to_string(),
+            sha256: Some("aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223".to_string()),
             size_mb: 1221,
             context_size: 32768,
             layer_count: 24,
@@ -183,6 +193,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             gguf_file: "Qwen3.5-4B-Q4_K_M.gguf".to_string(),
             template: "qwen3.5_nonthinking".to_string(),
             download_url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf".to_string(),
+            sha256: Some("00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4".to_string()),
             size_mb: 2614,
             context_size: 32768,
             layer_count: 32,
@@ -196,6 +207,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             gguf_file: "gemma-3-4b-it-Q4_K_M.gguf".to_string(),
             template: "gemma3".to_string(),
             download_url: "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf".to_string(),
+            sha256: Some("4996030242583a40aa151ff93f49ed787ac8c25e4120c3ae4588b2e2a7d1ae94".to_string()),
             size_mb: 2374,
             context_size: 32768,
             layer_count: 35,
@@ -209,6 +221,7 @@ pub fn get_available_models() -> Vec<ModelDef> {
             gguf_file: "gemma-3-1b-it-Q8_0.gguf".to_string(),
             template: "gemma3".to_string(),
             download_url: "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q8_0.gguf".to_string(),
+            sha256: Some("375e12a4a18929a641f9744b060d4a7cf4e279530750555828ec0c117870bc96".to_string()),
             size_mb: 1019,
             context_size: 32768,
             layer_count: 26,

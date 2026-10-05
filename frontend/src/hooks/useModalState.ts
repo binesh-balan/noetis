@@ -5,16 +5,12 @@ import { TranscriptModelProps } from '@/components/TranscriptSettings';
 import type { TranscriptionErrorPayload } from '@/services/transcriptService';
 
 export type ModalType =
-  | 'modelSettings'
-  | 'deviceSettings'
   | 'languageSettings'
   | 'modelSelector'
   | 'errorAlert'
   | 'chunkDropWarning';
 
 interface ModalState {
-  modelSettings: boolean;
-  deviceSettings: boolean;
   languageSettings: boolean;
   modelSelector: boolean;
   errorAlert: boolean;
@@ -47,8 +43,6 @@ interface UseModalStateReturn {
 export function useModalState(transcriptModelConfig?: TranscriptModelProps): UseModalStateReturn {
   // Modal visibility state
   const [modals, setModals] = useState<ModalState>({
-    modelSettings: false,
-    deviceSettings: false,
     languageSettings: false,
     modelSelector: false,
     errorAlert: false,
@@ -85,8 +79,6 @@ export function useModalState(transcriptModelConfig?: TranscriptModelProps): Use
   // Hide all modals
   const hideAllModals = useCallback(() => {
     setModals({
-      modelSettings: false,
-      deviceSettings: false,
       languageSettings: false,
       modelSelector: false,
       errorAlert: false,

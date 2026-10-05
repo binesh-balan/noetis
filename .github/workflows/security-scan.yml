@@ -1,0 +1,130 @@
+name: "Security Scan"
+
+# New, dedicated workflow (security/reports/09-supply-chain.md §8-9): before this,
+# cargo-audit/cargo-deny/clippy/fmt/gitleaks/semgrep/trivy/osv-scanner all ran nowhere
+# in CI. Deliberately NOT added as jobs inside build.yml/build-windows.yml/etc. —
+# scanning cadence should be decoupled from the release-build matrix, matching the
+# report's own recommendation. Manual + weekly trigger, matching this repo's existing
+# all-manual-trigger philosophy (no workflow here uses pull_request/pull_request_target;
+# see security/reports/01-inventory.md §8) while still catching newly-disclosed
+# advisories between manual runs.
+#
+# Every check below runs with continue-on-error: true. This repo has never run any of
+# these tools before, so there is no known-clean baseline — a hard gate on day one would
+# likely fail CI on pre-existing findings unrelated to whatever change triggered the
+# run. Once a human has reviewed a full report and confirmed (or fixed) the baseline,
+# remove continue-on-error from the checks that should actually block merges.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # Weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  rust-lint-and-audit:
+    name: Rust lint, format, and dependency audit
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      # Matches the Linux native-dependency list build.yml already installs for
+      # ubuntu-24.04, so `cargo clippy` can actually build the Tauri crate.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libappindicator3-dev librsvg2-dev patchelf libasound2-dev libopenblas-dev libx11-dev libxtst-dev libxrandr-dev \
+            libwebkit2gtk-4.1-0=2.44.0-2 \
+            libwebkit2gtk-4.1-dev=2.44.0-2 \
+            libjavascriptcoregtk-4.1-0=2.44.0-2 \
+            libjavascriptcoregtk-4.1-dev=2.44.0-2 \
+            gir1.2-javascriptcoregtk-4.1=2.44.0-2 \
+            gir1.2-webkit2-4.1=2.44.0-2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit
+        run: cargo audit
+        continue-on-error: true
+
+  frontend-audit:
+    name: Frontend dependency audit
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: pnpm audit
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so gitleaks can scan past commits too
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # security/RESIDUAL_RISKS.md: security/SBOM.json was never generated because
+      # syft/cargo-cyclonedx aren't available in the environment this audit ran in. This
+      # job produces one in CI instead (syft can read Cargo.lock, pnpm-lock.yaml, and
+      # backend/requirements.txt in one pass) and uploads it as a workflow artifact.
+      # Download it from a workflow run and commit it to security/SBOM.json — this job
+      # deliberately does not auto-commit, since that needs contents:write and a
+      # decision about which branch it should land on.
+      - name: Generate SBOM with syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: SBOM.json
+          upload-artifact: true
+          upload-artifact-retention: 30

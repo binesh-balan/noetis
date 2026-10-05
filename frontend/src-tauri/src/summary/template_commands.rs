@@ -14,6 +14,9 @@ pub struct TemplateInfo {
 
     /// Brief description of the template's purpose
     pub description: String,
+
+    /// "org", "custom", or "builtin"; only "custom" is editable
+    pub source: String,
 }
 
 /// Detailed template structure for preview/debugging
@@ -50,6 +53,7 @@ pub async fn api_list_templates<R: Runtime>(
     let template_infos: Vec<TemplateInfo> = templates
         .into_iter()
         .map(|(id, name, description)| TemplateInfo {
+            source: templates::template_source(&id).to_string(),
             id,
             name,
             description,
@@ -121,6 +125,34 @@ pub async fn api_validate_template<R: Runtime>(
             Err(e)
         }
     }
+}
+
+/// Full template for the editor.
+#[tauri::command]
+pub async fn api_get_template<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    template_id: String,
+) -> Result<templates::Template, String> {
+    templates::get_template(&template_id)
+}
+
+#[tauri::command]
+pub async fn api_save_custom_template<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    template_id: String,
+    template: templates::Template,
+) -> Result<(), String> {
+    info!("api_save_custom_template called for '{}'", template_id);
+    templates::save_custom_template(&template_id, &template)
+}
+
+#[tauri::command]
+pub async fn api_delete_custom_template<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    template_id: String,
+) -> Result<(), String> {
+    info!("api_delete_custom_template called for '{}'", template_id);
+    templates::delete_custom_template(&template_id)
 }
 
 #[cfg(test)]
