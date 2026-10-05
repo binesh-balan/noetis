@@ -1,0 +1,26 @@
+# LiteLLM proxy config for the Noetis LLM gateway. See README.md.
+# Secrets come from environment variables (os.environ/...), never from this file.
+
+model_list:
+  - model_name: noetis-deepseek            # what Noetis asks for (policy.json summary.model)
+    litellm_params:
+      model: azure_ai/<your-deepseek-deployment-name>
+      api_base: os.environ/AZURE_AI_API_BASE   # https://<resource>.services.ai.azure.com/models
+      api_key: os.environ/AZURE_AI_API_KEY     # server-side only; users never see it
+      # Prices drive the per-user USD budgets. Copy them from your Azure price sheet
+      # (price per 1M tokens / 1,000,000). The values below are EXAMPLES, not Azure's rates.
+      input_cost_per_token: 0.0000006
+      output_cost_per_token: 0.0000017
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY  # admin only (provisioning); keep it out of clients
+  database_url: os.environ/DATABASE_URL      # Postgres: users, budgets, spend
+  # Employees sign in with Entra ID; custom_auth.py validates their token (open source).
+  custom_auth: custom_auth.user_api_key_auth
+  custom_auth_settings:
+    mode: "auto"                             # custom auth first, then the master key
+  custom_auth_run_common_checks: true        # enforce per-user budgets from the DB records
+
+litellm_settings:
+  drop_params: true                          # ignore client params the model doesn't support
+  request_timeout: 60

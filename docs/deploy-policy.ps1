@@ -16,6 +16,10 @@
 
 .EXAMPLE
   .\deploy-policy.ps1 -Endpoint "https://contoso-ai.services.ai.azure.com/openai/v1" -Model "DeepSeek-V4-Flash-0731" -TenantId "<directory id>" -ClientId "<application id>" -ModelsSource "\\fileserver\noetis-models" -Language en
+
+.EXAMPLE
+  # Through the internal LLM gateway (docs/llm-gateway): employees only, per-user budgets
+  .\deploy-policy.ps1 -Endpoint "https://llm-gateway.contoso.internal/v1" -Model "noetis-deepseek" -TenantId "<directory id>" -ClientId "<noetis application id>" -Scope "api://<gateway application id>/.default" -ModelsSource "\\fileserver\noetis-models" -Language en
 #>
 param(
     # AI summaries: endpoint + model, authenticated by Entra ID sign-in (recommended) or a key
@@ -23,6 +27,7 @@ param(
     [string] $Model,
     [string] $TenantId,
     [string] $ClientId,
+    [string] $Scope,                  # e.g. api://<gateway app id>/.default for the LLM gateway
     [string] $ApiKey,
     [int] $MaxTokens = 8192,
 
@@ -70,7 +75,9 @@ if ($TenantId -or $ClientId) {
     if (-not ($TenantId -and $ClientId)) { throw 'Pass -TenantId and -ClientId together.' }
     if ($ApiKey) { throw 'Use either -ApiKey or Entra ID sign-in (-TenantId/-ClientId), not both.' }
     $policy.entra = [ordered]@{ tenantId = $TenantId; clientId = $ClientId }
+    if ($Scope) { $policy.entra.scope = $Scope }
 }
+elseif ($Scope) { throw '-Scope needs -TenantId and -ClientId.' }
 
 if ($Endpoint -or $Model -or $ApiKey) {
     if (-not ($Endpoint -and $Model)) { throw 'Pass -Endpoint and -Model together.' }
