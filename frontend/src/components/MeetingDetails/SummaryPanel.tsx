@@ -9,7 +9,8 @@ import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
 import Analytics from '@/lib/analytics';
 import { useEffect, useRef, useState, RefObject } from 'react';
 import { toast } from 'sonner';
-import { Languages, ChevronDown } from 'lucide-react';
+import { Languages, ChevronDown, NotebookText } from 'lucide-react';
+import { MeetingContextForm } from '@/components/MeetingContextForm';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { LanguagePickerPopover } from '@/components/LanguagePickerPopover';
@@ -252,6 +253,16 @@ export function SummaryPanel({
       <div className="flex min-h-11 items-center gap-2 border-b border-border px-4">
         <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Summary</h2>
         <div className="ml-auto flex min-w-0 items-center gap-2 flex-wrap justify-end">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" className={toolbarButtonClass} title="Meeting context used in the summary">
+                <NotebookText /> Context
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80">
+              <MeetingContextForm meetingId={meeting.id} />
+            </PopoverContent>
+          </Popover>
           <div className="flex-shrink-0 min-w-0">
             <SummaryGeneratorButtonGroup
               modelConfig={modelConfig}
