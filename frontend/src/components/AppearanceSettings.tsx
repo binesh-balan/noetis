@@ -3,9 +3,9 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme, type ThemeChoice } from '@/hooks/useTheme';
 
 const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
-  { value: 'system', label: 'System', icon: Monitor },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'light', label: 'Light', icon: Sun },
+  { value: 'system', label: 'System', icon: Monitor },
 ];
 
 export function AppearanceSettings() {
@@ -14,7 +14,7 @@ export function AppearanceSettings() {
     <section className="space-y-3">
       <div>
         <h3 className="text-sm font-semibold">Theme</h3>
-        <p className="text-sm text-muted-foreground">System follows your operating system setting.</p>
+        <p className="text-sm text-muted-foreground">Dark is the default. System follows your operating system setting.</p>
       </div>
       <div role="radiogroup" aria-label="Theme" className="inline-flex rounded-md border border-border bg-card p-0.5">
         {OPTIONS.map(({ value, label, icon: Icon }) => (
