@@ -1,0 +1,31 @@
+# Pilot / single-server deployment. Put it behind your internal HTTPS reverse proxy
+# (Noetis only talks to the gateway over https). Copy .env.example to .env first.
+services:
+  gateway:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@db:5432/litellm
+    ports:
+      - "127.0.0.1:4000:4000"   # the reverse proxy on this host terminates TLS
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_DB: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - gateway-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  gateway-db:
