@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Noetis answer</title>
+<style>
+  /* Values mirror src/app/globals.css :root / .dark tokens. */
+  :root { --bg: 240 14.3% 98.6%; --fg: 225 8.3% 9.4%; --muted: 229 8.2% 40.6%; --border: 228 9.8% 90%; --primary: 240 60% 59.8%; --secondary: 240 11.8% 93.3%; --warning: 30 100% 32%; }
+  :root.dark { --bg: 228 11.6% 8.4%; --fg: 225 8.7% 91%; --muted: 226 5.9% 56.7%; --border: 225 10.5% 14.9%; --primary: 239 87.1% 75.7%; --secondary: 225 12.1% 12.9%; --warning: 38 92% 60%; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px/1.45 "Segoe UI", system-ui, sans-serif; background: hsl(var(--bg)); color: hsl(var(--fg)); border: 1px solid hsl(var(--border)); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  header { display: flex; align-items: center; gap: 8px; user-select: none; }
+  h1 { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: hsl(var(--muted)); margin: 0; }
+  .badge { font-size: 11px; color: hsl(var(--warning)); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; }
+  #question { margin: 0; color: hsl(var(--muted)); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #answer { margin: 0; font-size: 14px; overflow-y: auto; flex: 1; user-select: text; }
+  #thinking, #error { margin: auto 0; color: hsl(var(--muted)); }
+  .row { display: flex; gap: 8px; justify-content: flex-end; }
+  button { font: inherit; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; background: hsl(var(--secondary)); color: hsl(var(--fg)); }
+  #copy { background: hsl(var(--primary)); color: hsl(var(--bg)); font-weight: 600; }
+  button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <header><h1>Suggested answer</h1><span id="unsure" class="badge" hidden>unsure</span></header>
+  <p id="thinking">Thinking…</p>
+  <p id="error" hidden></p>
+  <p id="question" hidden></p>
+  <p id="answer" hidden></p>
+  <div class="row">
+    <button id="dismiss">Dismiss</button>
+    <button id="copy" hidden>Copy</button>
+  </div>
+  <script src="/answer-card.js"></script>
+</body>
+</html>

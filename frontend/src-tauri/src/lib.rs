@@ -483,6 +483,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        live_answers::on_hotkey(app.clone());
+                    }
+                })
+                .build(),
+        )
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
@@ -526,6 +535,9 @@ pub fn run() {
                 log::error!("Failed to create system tray: {}", e);
             }
             meeting_detector::spawn(_app.handle().clone());
+            if let Err(e) = live_answers::register_hotkey(_app.handle(), &live_answers::load_settings(_app.handle())) {
+                log::warn!("Live answers hotkey not registered: {e}");
+            }
 
             // Initialize notification system with proper defaults
             log::info!("Initializing notification system...");
@@ -869,6 +881,17 @@ pub fn run() {
             voices::api_rename_voice,
             voices::api_forget_voice,
             meeting_detector::meeting_prompt_info,
+            context::get_profile,
+            context::set_profile,
+            context::get_live_meeting_context,
+            context::set_live_meeting_context,
+            context::get_meeting_context,
+            context::save_meeting_context,
+            live_answers::live_answers_get_settings,
+            live_answers::live_answers_set_settings,
+            live_answers::answer_card_state,
+            live_answers::answer_card_dismiss,
+            live_answers::live_answer_history,
             meeting_detector::meeting_prompt_respond,
             meeting_detector::reveal_main_window,
             meeting_detector::detector_start_pending,

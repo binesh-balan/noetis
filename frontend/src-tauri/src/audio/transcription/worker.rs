@@ -224,6 +224,9 @@ pub fn start_transcription_task<R: Runtime>(
                                                 worker_id, e
                                             );
                                         }
+                                        if !update.is_partial {
+                                            crate::live_answers::on_segment(&app_clone, &update.text, update.audio_start_time, update.audio_end_time);
+                                        }
                                         // PERFORMANCE: Removed verbose logging of every emission
                                     }
                                 }

@@ -1046,6 +1046,10 @@ pub async fn stop_recording<R: Runtime>(
         (None, None)
     };
 
+    // This meeting's context goes into its folder; live answer state is per recording.
+    crate::context::finish_recording(meeting_folder.as_deref());
+    crate::live_answers::reset(&app);
+
     // Set recording flag to false
     info!("🔍 Setting IS_RECORDING to false");
     IS_RECORDING.store(false, Ordering::SeqCst);
