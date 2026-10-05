@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useManagedPolicy } from '@/hooks/useManagedPolicy';
-import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette, Users } from 'lucide-react';
+import { Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate, Palette, Users, UserRound, MessageSquareText } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { TranscriptSettings } from '@/components/TranscriptSettings';
@@ -14,11 +14,15 @@ import { TemplateSettings } from '@/components/TemplateSettings';
 import { BetaSettings } from '@/components/BetaSettings';
 import { AppearanceSettings } from '@/components/AppearanceSettings';
 import { SpeakerSettings } from '@/components/SpeakerSettings';
+import { AboutMeSettings } from '@/components/AboutMeSettings';
+import { LiveAnswersSettings } from '@/components/LiveAnswersSettings';
 import { useConfig } from '@/contexts/ConfigContext';
 
 // Tabs configuration (constant)
 const TABS = [
   { value: 'general', label: 'General', icon: Settings2 },
+  { value: 'aboutMe', label: 'About me', icon: UserRound },
+  { value: 'liveAnswers', label: 'Live answers', icon: MessageSquareText },
   { value: 'recording', label: 'Recordings', icon: Mic },
   { value: 'speakers', label: 'Speakers', icon: Users },
   { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
@@ -94,6 +98,8 @@ function SettingsContent() {
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl space-y-6 p-8">
           {activeTab === 'general' && (<><OrgAccountSettings /><PreferenceSettings /></>)}
+          {activeTab === 'aboutMe' && <AboutMeSettings />}
+          {activeTab === 'liveAnswers' && <LiveAnswersSettings />}
           {activeTab === 'recording' && <RecordingSettings />}
           {activeTab === 'speakers' && <SpeakerSettings />}
           {activeTab === 'Transcriptionmodels' && (
