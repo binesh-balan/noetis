@@ -7,6 +7,7 @@ import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { PermissionWarning } from '@/components/PermissionWarning';
 import { usePermissionCheck } from '@/hooks/usePermissionCheck';
 import { useIsLinux, useModKeyLabel } from '@/hooks/usePlatform';
+import { MeetingContextForm } from '@/components/MeetingContextForm';
 
 /**
  * Idle Home. `startControl` is RecordingControls' own start button (it owns the
@@ -46,6 +47,10 @@ export function HomeIdle({ startControl }: { startControl: ReactNode }) {
           <kbd className="rounded border border-border px-1 text-[11px]">{mod}R</kbd> from anywhere
         </p>
       </div>
+      <details className="w-full max-w-md rounded-lg border border-border p-3 text-left">
+        <summary className="cursor-pointer text-sm text-muted-foreground">Meeting context (optional)</summary>
+        <div className="mt-3"><MeetingContextForm /></div>
+      </details>
       {betaFeatures.importAndRetranscribe && (
         <button onClick={() => openImportDialog()} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <Upload className="h-4 w-4" /> Import audio file
