@@ -53,6 +53,7 @@ pub mod onboarding;
 pub mod openai;
 pub mod anthropic;
 pub mod groq;
+pub mod live_answers;
 pub mod openrouter;
 pub mod parakeet_engine;
 pub mod policy;
